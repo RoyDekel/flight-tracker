@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plane, Calendar, Bookmark, Bell, Compass, Activity, ArrowLeftRight } from 'lucide-react';
+import { Plane, Calendar, Bookmark, Bell, Compass, Activity } from 'lucide-react';
 import { 
-  generateFlightDatabase, 
+  AIRPORTS, 
+  generateFlightsForRoute,
+  calculatePassengerCost,
   getFlightTelemetry 
 } from './utils/flightSimulator';
 import FlightMap from './components/FlightMap';
@@ -12,22 +14,46 @@ import Watchlist from './components/Watchlist';
 import AlertsManager from './components/AlertsManager';
 
 export default function App() {
-  // 1. Core State
-  const [flightDatabase, setFlightDatabase] = useState(() => generateFlightDatabase());
-  const [direction, setDirection] = useState('outbound'); // 'outbound' (TLV->KRK) or 'return' (KRK->TLV)
-  const [selectedDate, setSelectedDate] = useState('2026-08-11'); // Outbound target date
-  
-  const [activeFlight, setActiveFlight] = useState(() => {
-    const database = generateFlightDatabase();
-    return database.outbound['2026-08-11'][0]; // Default: Wizz Air Aug 11 Outbound
+  // 1. Search Query Parameters
+  const [searchParams, setSearchParams] = useState({
+    origin: 'TLV',
+    destination: 'KRK',
+    departureDate: '2026-08-11',
+    returnDate: '2026-08-16',
+    passengers: {
+      adults: 1,
+      children: 0,
+      infants: 0
+    }
   });
 
-  // 2. Simulation State
+  // 2. Active Roundtrip Bundle State
+  const [activeRoundtrip, setActiveRoundtrip] = useState(() => {
+    const defaultOutbound = generateFlightsForRoute('TLV', 'KRK', '2026-08-11', 'outbound', { adults: 1 })[0];
+    const defaultReturn = generateFlightsForRoute('KRK', 'TLV', '2026-08-16', 'return', { adults: 1 })[0];
+    
+    return {
+      outbound: defaultOutbound,
+      return: defaultReturn,
+      passengers: { adults: 1, children: 0, infants: 0 },
+      origin: 'TLV',
+      destination: 'KRK',
+      departureDate: '2026-08-11',
+      returnDate: '2026-08-16'
+    };
+  });
+
+  // 3. Active Tracked Leg (Defaults to Outbound)
+  const [activeFlight, setActiveFlight] = useState(() => activeRoundtrip.outbound);
+  const [selectedDate, setSelectedDate] = useState('2026-08-11');
+  const [direction, setDirection] = useState('outbound'); // 'outbound' or 'return'
+
+  // 4. Simulation State
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationProgress, setSimulationProgress] = useState(0); // 0.0 to 1.0
   const [simulationSpeed, setSimulationSpeed] = useState(5); // 1x, 5x, 20x
 
-  // 3. User saved settings & history (Sync with localStorage)
+  // 5. Watchlist, Alerts & Notifications
   const [watchlist, setWatchlist] = useState(() => {
     const saved = localStorage.getItem('watchlist');
     return saved ? JSON.parse(saved) : [];
@@ -38,7 +64,7 @@ export default function App() {
       {
         id: 'seed-alert-1',
         flightNumber: 'W6 5122',
-        flightId: 'W6-5122-out-2026-08-11',
+        flightId: 'W6-100-outbound-2026-08-11',
         type: 'price-drop',
         thresholdPrice: 130,
         isActive: true,
@@ -47,7 +73,7 @@ export default function App() {
       {
         id: 'seed-alert-2',
         flightNumber: 'W6 5122',
-        flightId: 'W6-5122-out-2026-08-11',
+        flightId: 'W6-100-outbound-2026-08-11',
         type: 'status-change',
         thresholdPrice: null,
         isActive: true,
@@ -63,23 +89,28 @@ export default function App() {
         time: '12:00 PM',
         flightNumber: 'W6 5122',
         type: 'system',
-        message: 'AeroTrack flight tracker initialized. Select "Return flight" in the header to view Krakow to Tel-Aviv routes.'
+        message: 'AeroTrack dynamic engine initialized. Select the "Find Flights" tab to query new destinations.'
       }
     ];
   });
 
-  // 4. Tab Navigation State
+  // 6. Navigation Tabs
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showNotifBadge, setShowNotifBadge] = useState(false);
 
-  // Keep track of the last simulated flight status to detect status changes
   const prevStatusRef = useRef('Scheduled');
 
-  // Compute live telemetry based on progress and direction
-  const isOutboundDirection = activeFlight.direction === 'outbound';
-  const telemetry = getFlightTelemetry(simulationProgress, isOutboundDirection);
+  // Retrieve GPS Coordinates for active telemetry
+  const originAirport = AIRPORTS[activeFlight.origin] || AIRPORTS.TLV;
+  const destinationAirport = AIRPORTS[activeFlight.destination] || AIRPORTS.KRK;
+  
+  const telemetry = getFlightTelemetry(
+    simulationProgress, 
+    originAirport.coords, 
+    destinationAirport.coords
+  );
 
-  // Sync state to LocalStorage
+  // Sync to LocalStorage
   useEffect(() => {
     localStorage.setItem('watchlist', JSON.stringify(watchlist));
   }, [watchlist]);
@@ -92,24 +123,40 @@ export default function App() {
     localStorage.setItem('notifications', JSON.stringify(notifications));
   }, [notifications]);
 
-  // Handle Route Direction Switch (Outbound vs Return)
-  const handleDirectionSwitch = (newDirection) => {
-    if (newDirection === direction) return;
+  // Handle active leg switching
+  const handleLegSwitch = (targetLeg) => {
+    if (targetLeg === direction) return;
 
-    setDirection(newDirection);
+    setDirection(targetLeg);
     setIsSimulating(false);
     setSimulationProgress(0);
 
-    const defaultDate = newDirection === 'outbound' ? '2026-08-11' : '2026-08-16';
-    setSelectedDate(defaultDate);
-    
-    const firstFlight = flightDatabase[newDirection][defaultDate][0];
-    setActiveFlight(firstFlight);
+    if (targetLeg === 'outbound') {
+      setSelectedDate(searchParams.departureDate);
+      setActiveFlight(activeRoundtrip.outbound);
+    } else {
+      setSelectedDate(searchParams.returnDate);
+      setActiveFlight(activeRoundtrip.return);
+    }
     
     prevStatusRef.current = 'Scheduled';
   };
 
-  // Telemetry Simulation loop
+  // Sync active tracked flight when bundle changes
+  useEffect(() => {
+    if (direction === 'outbound') {
+      setActiveFlight(activeRoundtrip.outbound);
+      setSelectedDate(activeRoundtrip.departureDate);
+    } else {
+      setActiveFlight(activeRoundtrip.return);
+      setSelectedDate(activeRoundtrip.returnDate);
+    }
+    setIsSimulating(false);
+    setSimulationProgress(0);
+    prevStatusRef.current = 'Scheduled';
+  }, [activeRoundtrip]);
+
+  // Telemetry simulation loop
   useEffect(() => {
     let intervalId = null;
 
@@ -131,13 +178,12 @@ export default function App() {
     };
   }, [isSimulating, simulationSpeed]);
 
-  // Monitor flight status transitions to fire notifications
+  // Monitor flight status updates to trigger notifications
   useEffect(() => {
     const currentStatus = telemetry.status;
     const prevStatus = prevStatusRef.current;
 
     if (currentStatus !== prevStatus) {
-      // Find rules matching status updates for active flight
       const statusRules = alerts.filter(
         (a) => a.flightNumber === activeFlight.flightNumber && a.type === 'status-change'
       );
@@ -159,43 +205,34 @@ export default function App() {
     }
   }, [telemetry.status, alerts, activeFlight.flightNumber]);
 
-  // Market Engine: Fluctuate prices of all flights periodically
+  // Market Engine: Fluctuate active bundle prices periodically
   useEffect(() => {
     const priceInterval = setInterval(() => {
-      // Pick random direction
-      const randomDirection = Math.random() > 0.5 ? 'outbound' : 'return';
-      const dates = Object.keys(flightDatabase[randomDirection]);
-      const randomDate = dates[Math.floor(Math.random() * dates.length)];
-      const flightsOnDate = flightDatabase[randomDirection][randomDate] || [];
-      if (flightsOnDate.length === 0) return;
+      if (!activeRoundtrip) return;
 
-      const randomIndex = Math.floor(Math.random() * flightsOnDate.length);
-      const flightToAlter = flightsOnDate[randomIndex];
+      const isOutboundLeg = Math.random() > 0.5;
+      const targetLeg = isOutboundLeg ? 'outbound' : 'return';
+      const flight = activeRoundtrip[targetLeg];
 
       const change = Math.random() > 0.55 ? 5 : -5;
-      const originalPrice = flightToAlter.price;
-      const nextPrice = Math.max(50, originalPrice + change);
+      const nextPrice = Math.max(50, flight.price + change);
 
-      if (originalPrice !== nextPrice) {
-        setFlightDatabase((prevDb) => {
-          const copy = { ...prevDb };
-          copy[randomDirection][randomDate] = prevDb[randomDirection][randomDate].map((f, i) => {
-            if (i === randomIndex) {
-              return { ...f, price: nextPrice };
-            }
-            return f;
-          });
+      if (flight.price !== nextPrice) {
+        const updatedCosts = calculatePassengerCost(nextPrice, activeRoundtrip.passengers);
+
+        setActiveRoundtrip((prev) => {
+          const copy = { ...prev };
+          copy[targetLeg] = {
+            ...flight,
+            price: nextPrice,
+            passengerCosts: updatedCosts
+          };
           return copy;
         });
 
-        // Update active flight details if altered flight is currently tracked
-        if (flightToAlter.id === activeFlight.id) {
-          setActiveFlight((prev) => ({ ...prev, price: nextPrice }));
-        }
-
-        // Check price alert triggers
+        // Trigger alerts check
         const triggeredRules = alerts.filter(
-          (a) => a.flightId === flightToAlter.id && a.type === 'price-drop' && nextPrice <= a.thresholdPrice
+          (a) => a.flightId === flight.id && a.type === 'price-drop' && nextPrice <= a.thresholdPrice
         );
 
         if (triggeredRules.length > 0 && change < 0) {
@@ -203,7 +240,7 @@ export default function App() {
             const priceNotif = {
               id: `price-drop-${Date.now()}-${rule.id}`,
               time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-              flightNumber: flightToAlter.flightNumber,
+              flightNumber: flight.flightNumber,
               type: 'alert',
               message: `Price dropped to $${nextPrice}! (Threshold $${rule.thresholdPrice} met)`
             };
@@ -216,7 +253,7 @@ export default function App() {
     }, 8000);
 
     return () => clearInterval(priceInterval);
-  }, [flightDatabase, alerts, activeFlight.id]);
+  }, [activeRoundtrip, activeFlight.id, alerts]);
 
   // Watchlist Actions
   const handleToggleWatchlist = (flight) => {
@@ -229,12 +266,27 @@ export default function App() {
   };
 
   const handleTrackFromWatchlist = (flight, dateStr) => {
-    const flightDirection = flight.direction || 'outbound';
-    setDirection(flightDirection);
-    setSelectedDate(dateStr);
-    setActiveFlight(flight);
-    setSimulationProgress(0);
-    setIsSimulating(false);
+    // If tracking from watchlist, reset the roundtrip bundle to focus on this single saved option
+    const newMockBundle = {
+      outbound: flight,
+      return: { ...flight, id: flight.id + '-ret', direction: 'return', origin: flight.destination, destination: flight.origin, departureTime: '18:00', arrivalTime: '21:50' },
+      passengers: { adults: 1, children: 0, infants: 0 },
+      origin: flight.origin,
+      destination: flight.destination,
+      departureDate: dateStr,
+      returnDate: dateStr
+    };
+    
+    setSearchParams({
+      origin: flight.origin,
+      destination: flight.destination,
+      departureDate: dateStr,
+      returnDate: dateStr,
+      passengers: { adults: 1, children: 0, infants: 0 }
+    });
+    
+    setDirection('outbound');
+    setActiveRoundtrip(newMockBundle);
     setActiveTab('dashboard');
   };
 
@@ -279,7 +331,7 @@ export default function App() {
           </p>
         </div>
 
-        {/* DIRECTION SWITCHER HUD */}
+        {/* DYNAMIC DIRECTION SWITCHER HUD */}
         <div style={{
           display: 'flex',
           background: 'var(--bg-secondary)',
@@ -288,7 +340,7 @@ export default function App() {
           padding: '2px'
         }}>
           <button
-            onClick={() => handleDirectionSwitch('outbound')}
+            onClick={() => handleLegSwitch('outbound')}
             style={{
               padding: '8px 14px',
               borderRadius: '6px',
@@ -304,10 +356,10 @@ export default function App() {
               transition: 'all 0.2s ease'
             }}
           >
-            Outbound (TLV → KRK)
+            Outbound ({searchParams.origin} → {searchParams.destination})
           </button>
           <button
-            onClick={() => handleDirectionSwitch('return')}
+            onClick={() => handleLegSwitch('return')}
             style={{
               padding: '8px 14px',
               borderRadius: '6px',
@@ -323,7 +375,7 @@ export default function App() {
               transition: 'all 0.2s ease'
             }}
           >
-            Return (KRK → TLV)
+            Return ({searchParams.destination} → {searchParams.origin})
           </button>
         </div>
 
@@ -352,7 +404,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* DASHBOARD ROUTING TAB BAR */}
+      {/* DASHBOARD TAB BAR */}
       <nav style={{
         display: 'flex',
         gap: '8px',
@@ -397,8 +449,6 @@ export default function App() {
         {/* VIEW 1: DASHBOARD HUD */}
         {activeTab === 'dashboard' && (
           <div className="dashboard-grid">
-            
-            {/* Left HUD Panel: Map & Pricing */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <FlightMap 
                 telemetry={telemetry} 
@@ -409,7 +459,6 @@ export default function App() {
               />
             </div>
 
-            {/* Right Panel: Controls & Details */}
             <div>
               <FlightDetails 
                 activeFlight={activeFlight}
@@ -424,27 +473,26 @@ export default function App() {
                 isWatched={watchlist.some(w => w.id === activeFlight.id)}
                 selectedDate={selectedDate}
                 onOpenAlertModal={() => setActiveTab('alerts')}
+                activeRoundtrip={activeRoundtrip}
               />
             </div>
-            
           </div>
         )}
 
-        {/* VIEW 2: ALTERNATIVE FLIGHTS & DATES */}
+        {/* VIEW 2: DYNAMIC SEARCH & LISTINGS */}
         {activeTab === 'alternative' && (
           <AlternativeFlights
-            flightDatabase={flightDatabase[direction]}
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
             activeFlight={activeFlight}
-            setActiveFlight={(flight) => {
-              setActiveFlight(flight);
-              setSimulationProgress(0);
-              setIsSimulating(false);
-              setActiveTab('dashboard');
-            }}
+            setActiveFlight={setActiveFlight}
             onToggleWatchlist={handleToggleWatchlist}
             watchlist={watchlist}
+            searchParams={searchParams}
+            setSearchParams={setSearchParams}
+            activeRoundtrip={activeRoundtrip}
+            setActiveRoundtrip={setActiveRoundtrip}
+            setActiveTab={setActiveTab}
           />
         )}
 
@@ -458,7 +506,7 @@ export default function App() {
           />
         )}
 
-        {/* VIEW 4: ALERTS CONFIG & FEED */}
+        {/* VIEW 4: ALERTS CONFIG & LOGS */}
         {activeTab === 'alerts' && (
           <AlertsManager
             alerts={alerts}
@@ -466,7 +514,7 @@ export default function App() {
             notifications={notifications}
             setNotifications={setNotifications}
             activeFlight={activeFlight}
-            flightDatabase={flightDatabase}
+            flightDatabase={{}} // Not strictly required as inputs now read activeFlight dynamically
           />
         )}
 
@@ -480,7 +528,7 @@ export default function App() {
         fontSize: '0.75rem',
         color: 'var(--text-muted)'
       }}>
-        AeroTrack Flight Data Client © 2026. Outbound (TLV ✈ KRK) • Return (KRK ✈ TLV).
+        AeroTrack Flight Data Client © 2026. Roundtrip searches and live telemetry mapping.
       </footer>
 
     </div>

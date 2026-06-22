@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   Plane, Clock, ShieldAlert, Award, 
   Play, Pause, RotateCcw, Bell, 
-  Bookmark, BookmarkCheck, Calendar, Info, Globe 
+  Bookmark, BookmarkCheck, Calendar, Info, Globe, Users 
 } from 'lucide-react';
 import { AIRLINES, getSkyscannerUrl } from '../utils/flightSimulator';
 
@@ -18,7 +18,9 @@ export default function FlightDetails({
   onToggleWatchlist, 
   isWatched, 
   selectedDate,
-  onOpenAlertModal
+  onOpenAlertModal,
+  // Added roundtrip context
+  activeRoundtrip
 }) {
   const airlineInfo = AIRLINES[activeFlight.airlineCode] || { name: 'Unknown', logo: '✈️', color: 'var(--primary)' };
 
@@ -33,8 +35,18 @@ export default function FlightDetails({
   // Skyscanner Link
   const skyscannerUrl = getSkyscannerUrl(activeFlight.origin, activeFlight.destination, selectedDate);
 
+  // Passenger summary text helper
+  const getPassengersText = (passengers) => {
+    if (!passengers) return '1 Adult';
+    const parts = [];
+    if (passengers.adults > 0) parts.push(`${passengers.adults} Adult${passengers.adults > 1 ? 's' : ''}`);
+    if (passengers.children > 0) parts.push(`${passengers.children} Child${passengers.children > 1 ? 'ren' : ''}`);
+    if (passengers.infants > 0) parts.push(`${passengers.infants} Infant${passengers.infants > 1 ? 's' : ''}`);
+    return parts.join(', ');
+  };
+
   return (
-    <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
       {/* Header Info */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
@@ -116,15 +128,15 @@ export default function FlightDetails({
         </div>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'center' }}>
-          <div style={{ textAlign: 'left' }}>
+          <div style={{ textAlign: 'left', minWidth: '100px' }}>
             <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>
               {activeFlight.departureTime}
             </div>
             <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '4px' }}>
-              {activeFlight.origin === 'TLV' ? 'Tel Aviv (TLV)' : 'Krakow (KRK)'}
+              {activeFlight.origin}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              {activeFlight.origin === 'TLV' ? 'Terminal 3, Gate B4' : 'Terminal 1, Gate 5'}
+              Terminal 3, Gate B4
             </div>
           </div>
 
@@ -155,7 +167,7 @@ export default function FlightDetails({
                 color: 'var(--primary)',
                 position: 'absolute',
                 left: `calc(${progressPercent}% - 7px)`,
-                transform: `rotate(${activeFlight.direction === 'return' ? 270 : 90}deg)`,
+                transform: 'rotate(90deg)',
                 filter: 'drop-shadow(0 0 4px var(--primary-glow))',
                 transition: 'left 0.15s linear'
               }} />
@@ -166,15 +178,15 @@ export default function FlightDetails({
             </div>
           </div>
 
-          <div style={{ textAlign: 'right' }}>
+          <div style={{ textAlign: 'right', minWidth: '100px' }}>
             <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>
               {activeFlight.arrivalTime}
             </div>
             <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '4px' }}>
-              {activeFlight.destination === 'TLV' ? 'Tel Aviv (TLV)' : 'Krakow (KRK)'}
+              {activeFlight.destination}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              {activeFlight.destination === 'TLV' ? 'Terminal 3, Gate B4' : 'Terminal 1, Gate 5'}
+              Terminal 1, Gate 5
             </div>
           </div>
         </div>
@@ -215,6 +227,42 @@ export default function FlightDetails({
             {activeFlight.seatsRemaining} seats left
           </div>
         </div>
+      </div>
+
+      {/* Passenger count and combined cost card */}
+      <div style={{
+        backgroundColor: 'var(--bg-tertiary)',
+        border: '1px solid var(--border-glass-bright)',
+        borderRadius: 'var(--radius-sm)',
+        padding: '16px 20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+          <Users size={15} style={{ color: 'var(--primary)' }} />
+          <span>Cost Summary ({getPassengersText(activeRoundtrip?.passengers)})</span>
+        </div>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+            {activeFlight.direction === 'outbound' ? 'Outbound' : 'Return'} Ticket Fare:
+          </span>
+          <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--primary)' }}>
+            ${activeFlight.passengerCosts.total}
+          </span>
+        </div>
+
+        {activeRoundtrip && (
+          <div style={{ borderTop: '1px dashed var(--border-glass)', paddingTop: '8px', marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+              Roundtrip Package Total:
+            </span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#34d399', filter: 'drop-shadow(0 0 4px rgba(52, 211, 153, 0.2))' }}>
+              ${activeRoundtrip.outbound.passengerCosts.total + activeRoundtrip.return.passengerCosts.total}
+            </span>
+          </div>
+        )}
       </div>
 
       <div style={{ borderBottom: '1px solid var(--border-glass)' }}></div>

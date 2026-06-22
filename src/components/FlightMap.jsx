@@ -1,42 +1,47 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { TLV_COORDS, KRK_COORDS } from '../utils/flightSimulator';
+import { AIRPORTS } from '../utils/flightSimulator';
 
 export default function FlightMap({ telemetry, activeFlight }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const planeMarkerRef = useRef(null);
   const pathLineRef = useRef(null);
+  const fullPathRef = useRef(null);
+  const originMarkerRef = useRef(null);
+  const destMarkerRef = useRef(null);
 
-  // Determine starting coordinates based on direction
-  const isReturn = activeFlight.direction === 'return';
-  const startCoords = isReturn ? KRK_COORDS : TLV_COORDS;
+  // Retrieve coordinates dynamically based on selected flight route
+  const origin = AIRPORTS[activeFlight.origin] || AIRPORTS.TLV;
+  const destination = AIRPORTS[activeFlight.destination] || AIRPORTS.KRK;
+  
+  const startCoords = origin.coords;
+  const endCoords = destination.coords;
 
   // Custom airport markers
-  const tlvIcon = L.divIcon({
+  const originIcon = L.divIcon({
     html: `
       <div style="background: rgba(0, 242, 254, 0.15); border: 2px solid #00f2fe; width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px #00f2fe;">
         <div style="background: #00f2fe; width: 6px; height: 6px; border-radius: 50%;"></div>
       </div>
     `,
-    className: 'airport-marker-tlv',
+    className: 'airport-marker-origin',
     iconSize: [16, 16],
     iconAnchor: [8, 8]
   });
 
-  const krkIcon = L.divIcon({
+  const destIcon = L.divIcon({
     html: `
       <div style="background: rgba(161, 140, 209, 0.2); border: 2px solid #a18cd1; width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px #a18cd1;">
         <div style="background: #a18cd1; width: 6px; height: 6px; border-radius: 50%;"></div>
       </div>
     `,
-    className: 'airport-marker-krk',
+    className: 'airport-marker-dest',
     iconSize: [16, 16],
     iconAnchor: [8, 8]
   });
 
-  // Function to create rotating SVG plane marker
   const createPlaneIcon = (heading) => {
     return L.divIcon({
       html: `
@@ -56,14 +61,15 @@ export default function FlightMap({ telemetry, activeFlight }) {
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
+    // Center map initially around midpoint
     const midpoint = [
-      (TLV_COORDS[0] + KRK_COORDS[0]) / 2,
-      (TLV_COORDS[1] + KRK_COORDS[1]) / 2
+      (startCoords[0] + endCoords[0]) / 2,
+      (startCoords[1] + endCoords[1]) / 2
     ];
 
     const map = L.map(mapContainerRef.current, {
       center: midpoint,
-      zoom: 5,
+      zoom: 4,
       zoomControl: true,
       attributionControl: false
     });
@@ -74,14 +80,15 @@ export default function FlightMap({ telemetry, activeFlight }) {
       maxZoom: 19
     }).addTo(map);
 
-    // Draw full scheduled route (dotted line)
-    L.polyline([TLV_COORDS, KRK_COORDS], {
+    // Draw full route line (dotted)
+    const fullPath = L.polyline([startCoords, endCoords], {
       color: 'rgba(255, 255, 255, 0.15)',
       weight: 2,
       dashArray: '5, 8'
     }).addTo(map);
+    fullPathRef.current = fullPath;
 
-    // Draw active coverage path line (origin to current plane location)
+    // Draw active flight coverage path line
     const activePath = L.polyline([startCoords, [telemetry.latitude, telemetry.longitude]], {
       color: '#00f2fe',
       weight: 3.5,
@@ -90,23 +97,23 @@ export default function FlightMap({ telemetry, activeFlight }) {
     pathLineRef.current = activePath;
 
     // Airport Markers
-    const tlvMarker = L.marker(TLV_COORDS, { icon: tlvIcon }).addTo(map);
-    tlvMarker.bindTooltip('<b>Tel Aviv (TLV)</b><br>Ben Gurion Airport', { direction: 'top', className: 'map-tooltip' });
+    const originMarker = L.marker(startCoords, { icon: originIcon }).addTo(map);
+    originMarker.bindTooltip(`<b>${origin.city} (${origin.code})</b><br>${origin.name}`, { direction: 'top', className: 'map-tooltip' });
+    originMarkerRef.current = originMarker;
     
-    const krkMarker = L.marker(KRK_COORDS, { icon: krkIcon }).addTo(map);
-    krkMarker.bindTooltip('<b>Krakow (KRK)</b><br>John Paul II Airport', { direction: 'top', className: 'map-tooltip' });
+    const destMarker = L.marker(endCoords, { icon: destIcon }).addTo(map);
+    destMarker.bindTooltip(`<b>${destination.city} (${destination.code})</b><br>${destination.name}`, { direction: 'top', className: 'map-tooltip' });
+    destMarkerRef.current = destMarker;
 
     // Active Plane Marker
     const planeMarker = L.marker([telemetry.latitude, telemetry.longitude], {
       icon: createPlaneIcon(telemetry.heading)
     }).addTo(map);
-    
-    planeMarker.bindTooltip(`<b>${activeFlight.flightNumber}</b><br>Speed: ${telemetry.speed} km/h<br>Alt: ${telemetry.altitude} ft`, {
-      direction: 'top',
-      className: 'map-tooltip-plane'
-    });
-    
     planeMarkerRef.current = planeMarker;
+
+    // Adjust zoom and bounds to fit route perfectly
+    const bounds = L.latLngBounds([startCoords, endCoords]);
+    map.fitBounds(bounds, { padding: [50, 50] });
 
     return () => {
       if (mapRef.current) {
@@ -115,6 +122,40 @@ export default function FlightMap({ telemetry, activeFlight }) {
       }
     };
   }, []);
+
+  // Update Map Bounds and Markers when flight changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const currentCoords = [telemetry.latitude, telemetry.longitude];
+
+    // Update airport markers coordinates and tooltips
+    if (originMarkerRef.current) {
+      originMarkerRef.current.setLatLng(startCoords);
+      originMarkerRef.current.setTooltipContent(`<b>${origin.city} (${origin.code})</b><br>${origin.name}`);
+    }
+    if (destMarkerRef.current) {
+      destMarkerRef.current.setLatLng(endCoords);
+      destMarkerRef.current.setTooltipContent(`<b>${destination.city} (${destination.code})</b><br>${destination.name}`);
+    }
+
+    // Update full route line path
+    if (fullPathRef.current) {
+      fullPathRef.current.setLatLngs([startCoords, endCoords]);
+    }
+
+    // Fit map view to new bounds
+    const bounds = L.latLngBounds([startCoords, endCoords]);
+    mapRef.current.fitBounds(bounds, { padding: [50, 50], animate: true });
+
+    // Force updates to plane and tracking path
+    if (planeMarkerRef.current) {
+      planeMarkerRef.current.setLatLng(currentCoords);
+    }
+    if (pathLineRef.current) {
+      pathLineRef.current.setLatLngs([startCoords, currentCoords]);
+    }
+  }, [activeFlight.id, startCoords, endCoords]);
 
   // Update Plane Marker & Path when Telemetry changes
   useEffect(() => {
@@ -239,6 +280,7 @@ export default function FlightMap({ telemetry, activeFlight }) {
           font-family: var(--font-sans);
           font-size: 0.75rem;
           padding: 4px 8px;
+          z-index: 1000 !important;
         }
         .map-tooltip::before {
           border-top-color: var(--bg-secondary) !important;
@@ -252,6 +294,7 @@ export default function FlightMap({ telemetry, activeFlight }) {
           font-family: var(--font-sans);
           font-size: 0.75rem;
           padding: 6px 10px;
+          z-index: 1000 !important;
         }
         .map-tooltip-plane::before {
           border-top-color: var(--primary) !important;

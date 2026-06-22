@@ -1,217 +1,172 @@
-// AeroTrack Flight & Price Simulator Engine
+// AeroTrack Flight & Price Simulator Engine - Upgraded for Dynamic Search
 
-// Coordinates
-export const TLV_COORDS = [32.0114, 34.8867]; // Ben Gurion Airport
-export const KRK_COORDS = [50.0777, 19.7848]; // Krakow Airport
-
-// Base airlines data
-export const AIRLINES = {
-  W6: { name: 'Wizz Air', logo: '✈️', color: '#e0007b' },
-  LO: { name: 'LOT Polish Airlines', logo: '🇵🇱', color: '#002663' },
-  FR: { name: 'Ryanair', logo: '🔵', color: '#0033a0' },
-  LY: { name: 'EL AL Israel Airlines', logo: '🇮🇱', color: '#133068' }
+// Catalog of supported airports with coordinates, names, cities, and countries
+export const AIRPORTS = {
+  TLV: { code: 'TLV', name: 'Ben Gurion Airport', city: 'Tel Aviv', country: 'Israel', coords: [32.0114, 34.8867] },
+  KRK: { code: 'KRK', name: 'John Paul II Airport', city: 'Krakow', country: 'Poland', coords: [50.0777, 19.7848] },
+  LHR: { code: 'LHR', name: 'London Heathrow Airport', city: 'London', country: 'United Kingdom', coords: [51.4700, -0.4543] },
+  CDG: { code: 'CDG', name: 'Charles de Gaulle Airport', city: 'Paris', country: 'France', coords: [49.0097, 2.5479] },
+  JFK: { code: 'JFK', name: 'John F. Kennedy Intl Airport', city: 'New York', country: 'United States', coords: [40.6413, -73.7781] },
+  DXB: { code: 'DXB', name: 'Dubai International Airport', city: 'Dubai', country: 'United Arab Emirates', coords: [25.2532, 55.3657] },
+  FCO: { code: 'FCO', name: 'Leonardo da Vinci Airport', city: 'Rome', country: 'Italy', coords: [41.8003, 12.2389] },
+  NRT: { code: 'NRT', name: 'Narita International Airport', city: 'Tokyo', country: 'Japan', coords: [35.7720, 140.3929] },
+  ATH: { code: 'ATH', name: 'Eleftherios Venizelos Airport', city: 'Athens', country: 'Greece', coords: [37.9356, 23.9484] }
 };
 
-// Generate flights for a range of dates in both directions (Outbound and Return)
-// Outbound: August 8 to August 15 (targeting August 11)
-// Return: August 13 to August 20 (targeting August 16)
-export const generateFlightDatabase = () => {
-  const database = {
-    outbound: {},
-    return: {}
-  };
+// Airline Directory with appropriate colors and codes
+export const AIRLINES = {
+  W6: { code: 'W6', name: 'Wizz Air', logo: '✈️', color: '#e0007b', type: 'lowcost' },
+  FR: { code: 'FR', name: 'Ryanair', logo: '🔵', color: '#0033a0', type: 'lowcost' },
+  LO: { code: 'LO', name: 'LOT Polish Airlines', logo: '🇵🇱', color: '#002663', type: 'national' },
+  LY: { code: 'LY', name: 'EL AL Israel Airlines', logo: '🇮🇱', color: '#133068', type: 'national' },
+  BA: { code: 'BA', name: 'British Airways', logo: '🇬🇧', color: '#00205b', type: 'national' },
+  AF: { code: 'AF', name: 'Air France', logo: '🇫🇷', color: '#00209f', type: 'national' },
+  DL: { code: 'DL', name: 'Delta Air Lines', logo: '🔺', color: '#e01933', type: 'national' },
+  EK: { code: 'EK', name: 'Emirates', logo: '🇦🇪', color: '#d71920', type: 'national' },
+  JL: { code: 'JL', name: 'Japan Airlines', logo: '🇯🇵', color: '#d90011', type: 'national' }
+};
+
+// Haversine formula to compute great circle distance in kilometers
+export const getDistance = (coords1, coords2) => {
+  const [lat1, lon1] = coords1;
+  const [lat2, lon2] = coords2;
+  const R = 6371; // Earth radius in km
   
-  const outboundDates = [
-    '2026-08-08', '2026-08-09', '2026-08-10', '2026-08-11',
-    '2026-08-12', '2026-08-13', '2026-08-14', '2026-08-15'
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+      
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+};
+
+// Format duration from hours to "Xh Ym"
+const formatDuration = (hours) => {
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  return `${h}h ${m}m`;
+};
+
+// Calculate cost for a passenger structure
+export const calculatePassengerCost = (basePrice, passengers) => {
+  const { adults = 1, children = 0, infants = 0 } = passengers;
+  const adultCost = adults * basePrice;
+  const childCost = children * (basePrice * 0.75); // 25% discount for children
+  const infantCost = infants * (basePrice * 0.10); // 90% discount for infants
+  
+  return {
+    adults: Math.round(adultCost),
+    children: Math.round(childCost),
+    infants: Math.round(infantCost),
+    total: Math.round(adultCost + childCost + infantCost)
+  };
+};
+
+// Dynamically generate a set of flights between two airports for a specific date and direction
+export const generateFlightsForRoute = (originCode, destinationCode, dateStr, direction = 'outbound', passengers = { adults: 1 }) => {
+  const origin = AIRPORTS[originCode];
+  const destination = AIRPORTS[destinationCode];
+  
+  if (!origin || !destination) return [];
+  
+  const distance = getDistance(origin.coords, destination.coords);
+  
+  // Base flight duration: cruising at 760 km/h + 30 mins (0.5h) climb/descent time
+  const durationHours = (distance / 760) + 0.5;
+  const durationStr = formatDuration(durationHours);
+  
+  // Base ticket price: $40 entry fee + $0.075 per km
+  const basePricePerAdult = Math.round(40 + distance * 0.075);
+  
+  const dayOfWeek = new Date(dateStr).getDay(); // Weekend multiplier
+  const dateFactor = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6 ? 1.2 : 1.0;
+  
+  // Decide which airlines fly this route based on distance and region
+  let carrierOptions = [];
+  
+  if (distance < 1500) {
+    // Short-haul European/MidEast: Low-cost and regional carriers
+    carrierOptions = ['W6', 'FR', 'LO', 'ATH'];
+  } else if (distance >= 1500 && distance < 4500) {
+    // Medium-haul: National carriers
+    carrierOptions = ['LO', 'LY', 'BA', 'AF', 'FCO'];
+  } else {
+    // Long-haul (transatlantic, Tokyo, Dubai): Premium carriers
+    carrierOptions = ['LY', 'BA', 'AF', 'DL', 'EK', 'JL'];
+  }
+  
+  // Filter carriers actually defined in AIRLINES
+  const availableCarriers = carrierOptions
+    .map(code => AIRLINES[code] || AIRLINES.LO) // Fallback to LOT
+    .slice(0, 4); // Limit to 4 options
+    
+  // Generate 4 flights with varying departure slots, pricing, and airframes
+  const departures = ['06:20', '11:45', '16:10', '21:30'];
+  const aircraftModels = [
+    distance > 4000 ? 'Boeing 777-300ER' : 'Boeing 737 MAX 8',
+    distance > 4000 ? 'Airbus A350-900' : 'Airbus A321neo',
+    distance > 4000 ? 'Boeing 787-9 Dreamliner' : 'Boeing 737-800',
+    distance > 4000 ? 'Airbus A330-900neo' : 'Boeing 737-900ER'
   ];
 
-  const returnDates = [
-    '2026-08-13', '2026-08-14', '2026-08-15', '2026-08-16',
-    '2026-08-17', '2026-08-18', '2026-08-19', '2026-08-20'
-  ];
+  return availableCarriers.map((airline, idx) => {
+    // Calculate randomized offset for departure slot and airline tier
+    const tierMultiplier = airline.type === 'lowcost' ? 0.85 : 1.15;
+    const timeMultiplier = idx === 0 ? 0.95 : idx === 2 ? 1.05 : 1.0; // Early/late hours are cheaper
+    
+    const adultPrice = Math.round(basePricePerAdult * dateFactor * tierMultiplier * timeMultiplier);
+    
+    // Compute total structure pricing
+    const priceDetails = calculatePassengerCost(adultPrice, passengers);
+    
+    // Arrival time calculation
+    const [depHours, depMins] = departures[idx].split(':').map(Number);
+    let arrHours = Math.floor(depHours + durationHours);
+    let arrMins = Math.round(depMins + (durationHours - Math.floor(durationHours)) * 60);
+    if (arrMins >= 60) {
+      arrHours += 1;
+      arrMins -= 60;
+    }
+    const nextDay = arrHours >= 24;
+    arrHours = arrHours % 24;
+    
+    const formattedArrival = `${String(arrHours).padStart(2, '0')}:${String(arrMins).padStart(2, '0')}`;
+    
+    // Baggage policy based on carrier tier
+    const baggageDesc = airline.type === 'lowcost' 
+      ? '1 small personal bag (underseat) included. Carry-on costs extra.' 
+      : '1 carry-on (8kg) + 1 checked bag (23kg) included.';
 
-  // 1. OUTBOUND (TLV -> KRK)
-  outboundDates.forEach((date) => {
-    const dayOfWeek = new Date(date).getDay();
-    const dateFactor = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6 ? 1.25 : 1.0;
-    const dateOffset = (new Date(date).getDate() - 11) * 3.5;
-
-    database.outbound[date] = [
-      {
-        id: `W6-5122-out-${date}`,
-        flightNumber: 'W6 5122',
-        airlineCode: 'W6',
-        airlineName: AIRLINES.W6.name,
-        departureTime: '12:45',
-        arrivalTime: '16:35',
-        duration: '3h 50m',
-        price: Math.round((140 + dateOffset) * dateFactor),
-        cabinClass: 'Economy',
-        stops: 'Direct',
-        planeType: 'Airbus A321neo',
-        terminal: 'TLV T3 → KRK T1',
-        baggage: '1 personal item (40x30x20cm) included',
-        reliability: '92% On-Time',
-        seatsRemaining: 4,
-        direction: 'outbound',
-        origin: 'TLV',
-        destination: 'KRK'
-      },
-      {
-        id: `LO-152-out-${date}`,
-        flightNumber: 'LO 152',
-        airlineCode: 'LO',
-        airlineName: AIRLINES.LO.name,
-        departureTime: '05:20',
-        arrivalTime: '09:10',
-        duration: '3h 50m',
-        price: Math.round((210 + dateOffset) * dateFactor),
-        cabinClass: 'Economy',
-        stops: 'Direct',
-        planeType: 'Boeing 737 MAX 8',
-        terminal: 'TLV T3 → KRK T1',
-        baggage: '1 carry-on (8kg) + 1 personal item included',
-        reliability: '96% On-Time',
-        seatsRemaining: 9,
-        direction: 'outbound',
-        origin: 'TLV',
-        destination: 'KRK'
-      },
-      {
-        id: `FR-2596-out-${date}`,
-        flightNumber: 'FR 2596',
-        airlineCode: 'FR',
-        airlineName: AIRLINES.FR.name,
-        departureTime: '21:30',
-        arrivalTime: '01:15',
-        duration: '3h 45m',
-        price: Math.round((110 + dateOffset) * dateFactor),
-        cabinClass: 'Economy',
-        stops: 'Direct',
-        planeType: 'Boeing 737-800',
-        terminal: 'TLV T1 → KRK T1',
-        baggage: '1 small personal bag included',
-        reliability: '88% On-Time',
-        seatsRemaining: 2,
-        direction: 'outbound',
-        origin: 'TLV',
-        destination: 'KRK'
-      },
-      {
-        id: `LY-5121-out-${date}`,
-        flightNumber: 'LY 5121',
-        airlineCode: 'LY',
-        airlineName: AIRLINES.LY.name,
-        departureTime: '08:00',
-        arrivalTime: '11:55',
-        duration: '3h 55m',
-        price: Math.round((260 + dateOffset) * dateFactor),
-        cabinClass: 'Economy Premium',
-        stops: 'Direct',
-        planeType: 'Boeing 737-900ER',
-        terminal: 'TLV T3 → KRK T1',
-        baggage: '1 checked bag (23kg) + 1 carry-on (8kg) included',
-        reliability: '95% On-Time',
-        seatsRemaining: 7,
-        direction: 'outbound',
-        origin: 'TLV',
-        destination: 'KRK'
-      }
-    ];
+    return {
+      id: `${airline.code}-${idx + 100}-${direction}-${dateStr}`,
+      flightNumber: `${airline.code} ${idx + 101 + (direction === 'return' ? 10 : 0)}`,
+      airlineCode: airline.code,
+      airlineName: airline.name,
+      departureTime: departures[idx],
+      arrivalTime: formattedArrival + (nextDay ? ' (+1d)' : ''),
+      duration: durationStr,
+      durationVal: durationHours,
+      price: adultPrice, // adult base price
+      passengerCosts: priceDetails, // Breakdown and total cost
+      cabinClass: airline.type === 'lowcost' ? 'Economy' : 'Economy Standard',
+      stops: 'Direct',
+      planeType: aircraftModels[idx],
+      terminal: `${originCode} T${idx === 2 ? '1' : '3'} → ${destinationCode} T1`,
+      baggage: baggageDesc,
+      reliability: `${90 + (idx % 3) * 3}% On-Time`,
+      seatsRemaining: Math.floor(2 + (airline.code.charCodeAt(0) % 8)),
+      direction,
+      origin: originCode,
+      destination: destinationCode,
+      distance
+    };
   });
-
-  // 2. RETURN (KRK -> TLV)
-  returnDates.forEach((date) => {
-    const dayOfWeek = new Date(date).getDay();
-    const dateFactor = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6 ? 1.25 : 1.0;
-    const dateOffset = (new Date(date).getDate() - 16) * 3.5; // August 16 is baseline
-
-    database.return[date] = [
-      {
-        id: `W6-5121-ret-${date}`,
-        flightNumber: 'W6 5121',
-        airlineCode: 'W6',
-        airlineName: AIRLINES.W6.name,
-        departureTime: '06:15',
-        arrivalTime: '10:00',
-        duration: '3h 45m',
-        price: Math.round((145 + dateOffset) * dateFactor),
-        cabinClass: 'Economy',
-        stops: 'Direct',
-        planeType: 'Airbus A321neo',
-        terminal: 'KRK T1 → TLV T3',
-        baggage: '1 personal item (40x30x20cm) included',
-        reliability: '90% On-Time',
-        seatsRemaining: 5,
-        direction: 'return',
-        origin: 'KRK',
-        destination: 'TLV'
-      },
-      {
-        id: `LO-151-ret-${date}`,
-        flightNumber: 'LO 151',
-        airlineCode: 'LO',
-        airlineName: AIRLINES.LO.name,
-        departureTime: '22:50',
-        arrivalTime: '02:40',
-        duration: '3h 50m',
-        price: Math.round((215 + dateOffset) * dateFactor),
-        cabinClass: 'Economy',
-        stops: 'Direct',
-        planeType: 'Boeing 737 MAX 8',
-        terminal: 'KRK T1 → TLV T3',
-        baggage: '1 carry-on (8kg) + 1 personal item included',
-        reliability: '94% On-Time',
-        seatsRemaining: 8,
-        direction: 'return',
-        origin: 'KRK',
-        destination: 'TLV'
-      },
-      {
-        id: `FR-2595-ret-${date}`,
-        flightNumber: 'FR 2595',
-        airlineCode: 'FR',
-        airlineName: AIRLINES.FR.name,
-        departureTime: '16:20',
-        arrivalTime: '20:05',
-        duration: '3h 45m',
-        price: Math.round((115 + dateOffset) * dateFactor),
-        cabinClass: 'Economy',
-        stops: 'Direct',
-        planeType: 'Boeing 737-800',
-        terminal: 'KRK T1 → TLV T1',
-        baggage: '1 small personal bag included',
-        reliability: '89% On-Time',
-        seatsRemaining: 3,
-        direction: 'return',
-        origin: 'KRK',
-        destination: 'TLV'
-      },
-      {
-        id: `LY-5122-ret-${date}`,
-        flightNumber: 'LY 5122',
-        airlineCode: 'LY',
-        airlineName: AIRLINES.LY.name,
-        departureTime: '13:10',
-        arrivalTime: '17:05',
-        duration: '3h 55m',
-        price: Math.round((275 + dateOffset) * dateFactor),
-        cabinClass: 'Economy Premium',
-        stops: 'Direct',
-        planeType: 'Boeing 737-900ER',
-        terminal: 'KRK T1 → TLV T3',
-        baggage: '1 checked bag (23kg) + 1 carry-on (8kg) included',
-        reliability: '93% On-Time',
-        seatsRemaining: 6,
-        direction: 'return',
-        origin: 'KRK',
-        destination: 'TLV'
-      }
-    ];
-  });
-
-  return database;
 };
 
 // Generate price history (past 30 days) and prediction (next 7 days)
@@ -284,17 +239,16 @@ export const generatePriceHistory = (flightNumber, basePrice) => {
     adviceDetails = 'Prices are currently lower than average or expected to dip in the coming days.';
   } else {
     advice = 'BUY NOW';
-    adviceDetails = 'August is peak holiday season. Prices are unlikely to drop further.';
+    adviceDetails = 'High demand season. Fares are unlikely to drop further.';
   }
 
   return { history, predictions, advice, adviceDetails };
 };
 
-// Interpolate coordinates along the Great Circle (geodesic path)
-// isOutbound specifies if flight is TLV -> KRK (true) or KRK -> TLV (false)
-export const getFlightTelemetry = (progress, isOutbound = true) => {
-  const [lat1, lon1] = isOutbound ? TLV_COORDS : KRK_COORDS;
-  const [lat2, lon2] = isOutbound ? KRK_COORDS : TLV_COORDS;
+// Interpolate coordinates along the Great Circle (geodesic path) between any two coordinate sets
+export const getFlightTelemetry = (progress, originCoords, destinationCoords) => {
+  const [lat1, lon1] = originCoords || [32.0114, 34.8867];
+  const [lat2, lon2] = destinationCoords || [50.0777, 19.7848];
   
   const rLat1 = (lat1 * Math.PI) / 180;
   const rLon1 = (lon1 * Math.PI) / 180;
@@ -355,15 +309,16 @@ export const getFlightTelemetry = (progress, isOutbound = true) => {
     speed = Math.round(200 + descentProg * 620);
   } else {
     status = 'Landed';
-    altitude = isOutbound ? 780 : 135; // KRK elevation: ~780ft, TLV elevation: ~135ft
+    altitude = 120; // Default airport height (ft)
     speed = 0;
   }
 
-  const totalDistance = 2440; // km
+  const totalDistance = Math.round(6371 * d); // Dynamic km
   const distanceCovered = Math.round(totalDistance * progress);
   const distanceRemaining = Math.max(0, totalDistance - distanceCovered);
 
-  const totalMinutes = 230;
+  // Time remaining (assuming cruising at 780km/h + 30 mins)
+  const totalMinutes = Math.round((totalDistance / 780) * 60 + 30);
   const timeRemaining = Math.max(0, Math.round(totalMinutes * (1 - progress)));
 
   return {
@@ -380,11 +335,9 @@ export const getFlightTelemetry = (progress, isOutbound = true) => {
   };
 };
 
-// Generate deep search URL for Skyscanner based on route and date
-// Date format: YYYY-MM-DD
+// Generate deep search URL for Skyscanner
 export const getSkyscannerUrl = (origin, destination, dateStr) => {
   if (!dateStr) return 'https://www.skyscanner.com';
-  // Parse date into YYMMDD
   const parts = dateStr.split('-');
   if (parts.length !== 3) return 'https://www.skyscanner.com';
   const yy = parts[0].slice(-2);

@@ -1,38 +1,109 @@
 import React, { useState } from 'react';
-import { Calendar, Filter, Sparkles, ArrowRight, Check, Globe } from 'lucide-react';
-import { AIRLINES, getSkyscannerUrl } from '../utils/flightSimulator';
+import { 
+  Calendar, Filter, Sparkles, ArrowRight, Check, Globe, 
+  Users, ChevronDown, User, ShieldAlert, ArrowLeftRight 
+} from 'lucide-react';
+import { AIRPORTS, AIRLINES, generateFlightsForRoute, getSkyscannerUrl } from '../utils/flightSimulator';
 
 export default function AlternativeFlights({ 
-  flightDatabase, 
   selectedDate, 
   setSelectedDate, 
   activeFlight, 
   setActiveFlight,
   onToggleWatchlist,
-  watchlist
+  watchlist,
+  // New props for dynamic search
+  searchParams,
+  setSearchParams,
+  activeRoundtrip,
+  setActiveRoundtrip,
+  setActiveTab
 }) {
+  // Search inputs local states
+  const [localOrigin, setLocalOrigin] = useState(searchParams.origin);
+  const [localDestination, setLocalDestination] = useState(searchParams.destination);
+  const [localDepDate, setLocalDepDate] = useState(searchParams.departureDate);
+  const [localRetDate, setLocalRetDate] = useState(searchParams.returnDate);
+  
+  // Passenger dropdown states
+  const [showPassengerDropdown, setShowPassengerDropdown] = useState(false);
+  const [localAdults, setLocalAdults] = useState(searchParams.passengers.adults);
+  const [localChildren, setLocalChildren] = useState(searchParams.passengers.children);
+  const [localInfants, setLocalInfants] = useState(searchParams.passengers.infants);
+
+  // Sorting & Filtering local states
   const [sortKey, setSortKey] = useState('price'); // 'price', 'departureTime'
-  const [filterCarrier, setFilterCarrier] = useState('ALL'); // 'ALL', 'W6', 'LO', 'FR', 'LY'
+  const [filterCarrier, setFilterCarrier] = useState('ALL');
 
-  const dates = Object.keys(flightDatabase).sort();
+  // Booking Flow Steps: 1 = Outbound Selection, 2 = Return Selection, 3 = Confirmation Bundle
+  const [bookingStep, setBookingStep] = useState(1);
+  const [selectedOutbound, setSelectedOutbound] = useState(null);
+  const [selectedReturn, setSelectedReturn] = useState(null);
 
-  // Find lowest price for each date to show in the calendar header strip
-  const getLowestPriceForDate = (dateStr) => {
-    const flights = flightDatabase[dateStr] || [];
-    if (flights.length === 0) return null;
-    return Math.min(...flights.map(f => f.price));
+  // Error validation states
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Handle Search Submission
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (localOrigin === localDestination) {
+      setErrorMsg('Departure and Arrival airports cannot be the same.');
+      return;
+    }
+    if (new Date(localRetDate) <= new Date(localDepDate)) {
+      setErrorMsg('Return date must be after the departure date.');
+      return;
+    }
+    
+    setErrorMsg('');
+    
+    // Update global search parameters
+    const newParams = {
+      origin: localOrigin,
+      destination: localDestination,
+      departureDate: localDepDate,
+      returnDate: localRetDate,
+      passengers: {
+        adults: localAdults,
+        children: localChildren,
+        infants: localInfants
+      }
+    };
+    
+    setSearchParams(newParams);
+    
+    // Reset booking flow
+    setBookingStep(1);
+    setSelectedOutbound(null);
+    setSelectedReturn(null);
   };
 
-  // Get flights for selected date
-  const rawFlightsForDate = flightDatabase[selectedDate] || [];
+  // Generate lists based on search parameters
+  const outboundFlights = generateFlightsForRoute(
+    searchParams.origin, 
+    searchParams.destination, 
+    searchParams.departureDate, 
+    'outbound', 
+    searchParams.passengers
+  );
 
-  // Filter flights
-  const filteredFlights = rawFlightsForDate.filter(flight => {
+  const returnFlights = generateFlightsForRoute(
+    searchParams.destination, 
+    searchParams.origin, 
+    searchParams.returnDate, 
+    'return', 
+    searchParams.passengers
+  );
+
+  // Get active list depending on current step
+  const activeFlightList = bookingStep === 1 ? outboundFlights : returnFlights;
+
+  // Filter & Sort flights
+  const filteredFlights = activeFlightList.filter(flight => {
     if (filterCarrier === 'ALL') return true;
     return flight.airlineCode === filterCarrier;
   });
 
-  // Sort flights
   const sortedFlights = [...filteredFlights].sort((a, b) => {
     if (sortKey === 'price') {
       return a.price - b.price;
@@ -42,362 +113,635 @@ export default function AlternativeFlights({
     return 0;
   });
 
-  // Identify Cheapest flight
-  const cheapestPrice = rawFlightsForDate.length > 0 
-    ? Math.min(...rawFlightsForDate.map(f => f.price)) 
+  const cheapestPrice = activeFlightList.length > 0 
+    ? Math.min(...activeFlightList.map(f => f.price)) 
     : 0;
 
-  // Format date labels
-  const formatDayName = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { weekday: 'short' });
+  // Selection handlers
+  const handleSelectOutbound = (flight) => {
+    setSelectedOutbound(flight);
+    setBookingStep(2);
+    setFilterCarrier('ALL'); // Reset filter for return leg
   };
 
-  const formatDateNumber = (dateStr) => {
-    return new Date(dateStr).getDate();
+  const handleSelectReturn = (flight) => {
+    setSelectedReturn(flight);
+    setBookingStep(3);
   };
 
-  // Get active route parameters for Skyscanner deep link
-  const sampleFlight = rawFlightsForDate[0] || { origin: 'TLV', destination: 'KRK' };
-  const origin = sampleFlight.origin;
-  const destination = sampleFlight.destination;
-  const skyscannerUrl = getSkyscannerUrl(origin, destination, selectedDate);
+  // Confirm and start tracking the roundtrip bundle
+  const handleConfirmBundle = () => {
+    const roundtripBundle = {
+      outbound: selectedOutbound,
+      return: selectedReturn,
+      passengers: searchParams.passengers,
+      origin: searchParams.origin,
+      destination: searchParams.destination,
+      departureDate: searchParams.departureDate,
+      returnDate: searchParams.returnDate
+    };
+    
+    setActiveRoundtrip(roundtripBundle);
+    
+    // Set active flight to outbound to display on map first
+    setActiveFlight(selectedOutbound);
+    setSelectedDate(searchParams.departureDate);
+    
+    // Navigate to Dashboard HUD
+    setActiveTab('dashboard');
+  };
+
+  const skyscannerUrl = bookingStep === 1
+    ? getSkyscannerUrl(searchParams.origin, searchParams.destination, searchParams.departureDate)
+    : getSkyscannerUrl(searchParams.destination, searchParams.origin, searchParams.returnDate);
+
+  const totalPassengers = localAdults + localChildren + localInfants;
 
   return (
-    <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
       
-      {/* Component Title */}
-      <div>
-        <h3 style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Calendar size={18} style={{ color: 'var(--primary)' }} />
-          Alternative Flights & Dates
+      {/* 1. DYNAMIC ROUNDTRIP SEARCH PANEL FRAME */}
+      <div className="glass-panel" style={{ padding: '28px' }}>
+        <h3 style={{ fontSize: '1.25rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Globe size={20} style={{ color: 'var(--primary)' }} />
+          Roundtrip Flight Search
         </h3>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-          Compare surrounding dates and alternative carriers to secure the best deal
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '24px' }}>
+          Find and build premium roundtrip connections between key global terminals
         </p>
-      </div>
 
-      {/* SURROUNDING DATES CALENDAR STRIP */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        overflowX: 'auto',
-        paddingBottom: '8px',
-        borderBottom: '1px solid var(--border-glass)'
-      }}>
-        {dates.map((date) => {
-          const isSelected = date === selectedDate;
-          const lowestPrice = getLowestPriceForDate(date);
-          const dayName = formatDayName(date);
-          const dateNum = formatDateNumber(date);
-
-          return (
-            <button
-              key={date}
-              onClick={() => setSelectedDate(date)}
-              style={{
-                flex: '1 0 70px',
-                minWidth: '70px',
-                background: isSelected 
-                  ? 'linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(79, 172, 254, 0.15))' 
-                  : 'var(--bg-tertiary)',
-                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border-glass)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '10px 6px',
-                cursor: 'pointer',
-                textAlign: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '2px',
-                boxShadow: isSelected ? '0 0 12px var(--primary-glow-weak)' : 'none',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <span style={{ fontSize: '0.7rem', color: isSelected ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>
-                {dayName}
-              </span>
-              <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                {dateNum}
-              </span>
-              <span style={{ fontSize: '0.75rem', color: isSelected ? 'var(--text-primary)' : 'var(--primary)', fontWeight: 600 }}>
-                {lowestPrice ? `$${lowestPrice}` : '--'}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* SKYSCANNER FLIGHT AGGREGATOR BANNER */}
-      <div style={{
-        background: 'rgba(0, 180, 216, 0.08)',
-        border: '1px solid rgba(0, 180, 216, 0.2)',
-        borderRadius: 'var(--radius-sm)',
-        padding: '14px 16px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '12px',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <Globe size={20} style={{ color: '#00e1ff' }} />
-          <div>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Compare with Skyscanner Aggregator
+        <form onSubmit={handleSearch} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          
+          {/* Main inputs row */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px'
+          }}>
+            {/* Origin Select */}
+            <div className="input-group">
+              <label className="input-label">Departure Airport</label>
+              <select
+                value={localOrigin}
+                onChange={(e) => setLocalOrigin(e.target.value)}
+                className="input-field"
+                style={{ cursor: 'pointer' }}
+              >
+                {Object.keys(AIRPORTS).map(code => (
+                  <option key={code} value={code}>
+                    {AIRPORTS[code].city} ({AIRPORTS[code].code}) - {AIRPORTS[code].country}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Launch a live search from <b>{origin}</b> to <b>{destination}</b> on Skyscanner for {new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.
+
+            {/* Destination Select */}
+            <div className="input-group">
+              <label className="input-label">Arrival Airport</label>
+              <select
+                value={localDestination}
+                onChange={(e) => setLocalDestination(e.target.value)}
+                className="input-field"
+                style={{ cursor: 'pointer' }}
+              >
+                {Object.keys(AIRPORTS).map(code => (
+                  <option key={code} value={code}>
+                    {AIRPORTS[code].city} ({AIRPORTS[code].code}) - {AIRPORTS[code].country}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
-        </div>
-        
-        <a
-          href={skyscannerUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn"
-          style={{
-            padding: '6px 14px',
-            fontSize: '0.8rem',
-            background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
-            color: '#fff',
-            fontWeight: 600,
-            borderRadius: 'var(--radius-sm)',
-            textDecoration: 'none',
-            boxShadow: '0 4px 10px rgba(0, 180, 216, 0.2)'
-          }}
-        >
-          Compare on Skyscanner
-        </a>
-      </div>
 
-      {/* FILTER & SORT TOOLS ROW */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '12px',
-        fontSize: '0.85rem'
-      }}>
-        {/* Sort controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: 'var(--text-secondary)' }}>Sort by:</span>
-          <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '6px', border: '1px solid var(--border-glass)', padding: '2px' }}>
-            <button
-              onClick={() => setSortKey('price')}
-              style={{
-                padding: '4px 10px',
-                borderRadius: '4px',
-                border: 'none',
-                background: sortKey === 'price' ? 'var(--bg-secondary)' : 'transparent',
-                color: sortKey === 'price' ? 'var(--primary)' : 'var(--text-secondary)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontSize: '0.75rem'
-              }}
-            >
-              Cheapest
-            </button>
-            <button
-              onClick={() => setSortKey('departureTime')}
-              style={{
-                padding: '4px 10px',
-                borderRadius: '4px',
-                border: 'none',
-                background: sortKey === 'departureTime' ? 'var(--bg-secondary)' : 'transparent',
-                color: sortKey === 'departureTime' ? 'var(--primary)' : 'var(--text-secondary)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontSize: '0.75rem'
-              }}
-            >
-              Time
-            </button>
-          </div>
-        </div>
+            {/* Departure Date */}
+            <div className="input-group">
+              <label className="input-label">Departure Date</label>
+              <input 
+                type="date" 
+                value={localDepDate}
+                onChange={(e) => setLocalDepDate(e.target.value)}
+                className="input-field"
+                min="2026-06-22"
+              />
+            </div>
 
-        {/* Carrier filter controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Filter size={14} style={{ color: 'var(--text-secondary)' }} />
-          <select
-            value={filterCarrier}
-            onChange={(e) => setFilterCarrier(e.target.value)}
-            style={{
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-glass)',
-              borderRadius: '6px',
-              color: 'var(--text-primary)',
-              padding: '4px 12px 4px 8px',
-              fontFamily: 'var(--font-sans)',
-              outline: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="ALL">All Carriers</option>
-            {Object.keys(AIRLINES).map(code => (
-              <option key={code} value={code}>{AIRLINES[code].name}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+            {/* Return Date */}
+            <div className="input-group">
+              <label className="input-label">Return Date</label>
+              <input 
+                type="date" 
+                value={localRetDate}
+                onChange={(e) => setLocalRetDate(e.target.value)}
+                className="input-field"
+                min={localDepDate || "2026-06-22"}
+              />
+            </div>
 
-      {/* FLIGHT LISTINGS CONTAINER */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {sortedFlights.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-secondary)' }}>
-            No flights match your filter criteria on this date.
-          </div>
-        ) : (
-          sortedFlights.map((flight) => {
-            const isCheapest = flight.price === cheapestPrice;
-            const isActive = flight.id === activeFlight.id;
-            const airline = AIRLINES[flight.airlineCode] || { name: 'Unknown', logo: '✈️', color: 'var(--primary)' };
-            const isWatched = watchlist.some(w => w.id === flight.id);
-
-            return (
-              <div
-                key={flight.id}
+            {/* Passengers Selector with Dropdown Overlay */}
+            <div className="input-group" style={{ position: 'relative' }}>
+              <label className="input-label">Passengers</label>
+              <button
+                type="button"
+                onClick={() => setShowPassengerDropdown(!showPassengerDropdown)}
+                className="input-field"
                 style={{
-                  background: isActive 
-                    ? 'rgba(0, 242, 254, 0.04)' 
-                    : 'rgba(255, 255, 255, 0.01)',
-                  border: isActive 
-                    ? '1.5px solid var(--primary)' 
-                    : '1px solid var(--border-glass)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '16px',
                   display: 'flex',
-                  alignItems: 'center',
                   justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '16px',
-                  position: 'relative',
-                  boxShadow: isActive ? '0 0 15px rgba(0, 242, 254, 0.08)' : 'none',
-                  transition: 'all 0.2s ease'
+                  alignItems: 'center',
+                  background: 'var(--bg-tertiary)',
+                  textAlign: 'left',
+                  cursor: 'pointer'
                 }}
               >
-                {/* Special Tags Overlay */}
-                {isCheapest && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Users size={16} style={{ color: 'var(--primary)' }} />
+                  {totalPassengers} Passenger{totalPassengers > 1 ? 's' : ''}
+                </span>
+                <ChevronDown size={14} style={{ color: 'var(--text-secondary)' }} />
+              </button>
+
+              {/* Passenger Dropdown Submenu Frame */}
+              {showPassengerDropdown && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-glass-bright)',
+                  borderRadius: 'var(--radius-sm)',
+                  boxShadow: 'var(--shadow-lg)',
+                  zIndex: 600,
+                  marginTop: '6px',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}>
+                  {/* Adults */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Adults</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Age 12+</div>
+                    </div>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="9" 
+                      value={localAdults} 
+                      onChange={(e) => setLocalAdults(Math.max(1, Number(e.target.value)))}
+                      style={{ width: '50px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-glass)', borderRadius: '4px', color: '#fff', padding: '4px', textAlign: 'center' }}
+                    />
+                  </div>
+
+                  {/* Children */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Children</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Age 2-11</div>
+                    </div>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="9" 
+                      value={localChildren} 
+                      onChange={(e) => setLocalChildren(Math.max(0, Number(e.target.value)))}
+                      style={{ width: '50px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-glass)', borderRadius: '4px', color: '#fff', padding: '4px', textAlign: 'center' }}
+                    />
+                  </div>
+
+                  {/* Infants */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Infants</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Under age 2</div>
+                    </div>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="5" 
+                      value={localInfants} 
+                      onChange={(e) => setLocalInfants(Math.max(0, Number(e.target.value)))}
+                      style={{ width: '50px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-glass)', borderRadius: '4px', color: '#fff', padding: '4px', textAlign: 'center' }}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPassengerDropdown(false)}
+                    className="btn btn-primary"
+                    style={{ padding: '6px 0', fontSize: '0.8rem', marginTop: '4px' }}
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Validation errors */}
+          {errorMsg && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger)', fontSize: '0.8rem' }}>
+              <ShieldAlert size={14} />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {/* Search Button Container */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+            <button type="submit" className="btn btn-primary" style={{ minWidth: '180px', padding: '12px' }}>
+              Search Flights
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* 2. DWO-STEP BOOKING SELECTION FLOW */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        
+        {/* Step Indicator Header */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-glass)', borderRadius: 'var(--radius-sm)', padding: '12px 16px' }}>
+          {[
+            { step: 1, label: 'Select Outbound' },
+            { step: 2, label: 'Select Return' },
+            { step: 3, label: 'Confirm Bundle' }
+          ].map((item) => {
+            const isCompleted = bookingStep > item.step;
+            const isCurrent = bookingStep === item.step;
+            return (
+              <React.Fragment key={item.step}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{
-                    position: 'absolute',
-                    top: '-10px',
-                    left: '16px',
-                    background: 'linear-gradient(135deg, #059669, #10b981)',
-                    color: '#fff',
-                    fontSize: '0.65rem',
-                    fontWeight: 800,
-                    textTransform: 'uppercase',
-                    padding: '2px 8px',
-                    borderRadius: '4px',
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    background: isCompleted ? 'var(--success)' : isCurrent ? 'var(--primary)' : 'var(--bg-tertiary)',
+                    color: isCompleted || isCurrent ? '#0b0f19' : 'var(--text-secondary)',
+                    fontWeight: 700,
+                    fontSize: '0.75rem',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px',
-                    boxShadow: 'var(--shadow-sm)'
+                    justifyContent: 'center'
                   }}>
-                    <Sparkles size={10} /> Cheapest Deal
+                    {isCompleted ? '✓' : item.step}
                   </span>
-                )}
+                  <span style={{ fontSize: '0.8rem', fontWeight: isCurrent ? 600 : 400, color: isCurrent ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                    {item.label}
+                  </span>
+                </div>
+                {item.step < 3 && <div style={{ flexGrow: 0.1, height: '1.5px', background: 'var(--border-glass)' }}></div>}
+              </React.Fragment>
+            );
+          })}
+        </div>
 
-                {/* Airline & Number */}
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', minWidth: '150px' }}>
-                  <div style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '8px',
-                    backgroundColor: 'var(--bg-tertiary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.2rem',
-                    border: '1px solid var(--border-glass)'
-                  }}>
-                    {airline.logo}
+        {/* STEP 1 & 2: LISTINGS VIEW */}
+        {(bookingStep === 1 || bookingStep === 2) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            
+            {/* Show Selected Outbound in Step 2 Header */}
+            {bookingStep === 2 && selectedOutbound && (
+              <div className="glass-panel" style={{ background: 'rgba(5, 150, 105, 0.04)', borderColor: 'rgba(5, 150, 105, 0.25)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 700, textTransform: 'uppercase' }}>Selected Outbound Leg</div>
+                  <div style={{ fontSize: '1.05rem', fontWeight: 700, marginTop: '2px' }}>
+                    {selectedOutbound.airlineName} ({selectedOutbound.flightNumber}) • {selectedOutbound.departureTime} → {selectedOutbound.arrivalTime}
                   </div>
-                  <div>
-                    <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem' }}>
-                      {flight.airlineName}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                      {flight.flightNumber} • {flight.planeType}
-                    </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    Route: {selectedOutbound.origin} → {selectedOutbound.destination} • Fare: ${selectedOutbound.price} / adult
                   </div>
                 </div>
+                <button 
+                  onClick={() => {
+                    setSelectedOutbound(null);
+                    setBookingStep(1);
+                  }}
+                  className="btn btn-secondary" 
+                  style={{ padding: '6px 12px', fontSize: '0.75rem' }}
+                >
+                  Change Outbound
+                </button>
+              </div>
+            )}
 
-                {/* Schedule timeline */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '160px' }}>
-                  <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>{flight.departureTime}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{flight.origin}</div>
+            {/* Skyscanner Aggregator Banner */}
+            <div style={{
+              background: 'rgba(0, 180, 216, 0.08)',
+              border: '1px solid rgba(0, 180, 216, 0.2)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '14px 16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <Globe size={20} style={{ color: '#00e1ff' }} />
+                <div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                    Compare on Skyscanner Aggregator
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '60px' }}>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{flight.duration}</span>
-                    <div style={{ width: '40px', height: '1.5px', background: 'var(--border-glass)', margin: '4px 0', position: 'relative' }}>
-                      <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--text-muted)', position: 'absolute', top: '-1.2px', right: 0 }}></div>
-                    </div>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--success)', fontWeight: 600 }}>{flight.stops}</span>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    Search Skyscanner directly for {bookingStep === 1 ? searchParams.origin : searchParams.destination} → {bookingStep === 1 ? searchParams.destination : searchParams.origin} flights on {bookingStep === 1 ? searchParams.departureDate : searchParams.returnDate}.
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>{flight.arrivalTime}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{flight.destination}</div>
-                  </div>
-                </div>
-
-                {/* Price block */}
-                <div style={{ textAlign: 'center', minWidth: '80px' }}>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary)' }}>
-                    ${flight.price}
-                  </div>
-                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                    one-way
-                  </div>
-                </div>
-
-                {/* Tracking Action Button */}
-                <div style={{ display: 'flex', gap: '8px', minWidth: '120px' }}>
-                  {isActive ? (
-                    <button
-                      className="btn"
-                      disabled
-                      style={{
-                        flexGrow: 1,
-                        background: 'rgba(0, 242, 254, 0.1)',
-                        color: 'var(--primary)',
-                        border: '1px solid var(--primary)',
-                        padding: '6px 12px',
-                        fontSize: '0.8rem',
-                        cursor: 'default',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <Check size={14} /> Active
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setActiveFlight(flight)}
-                      className="btn btn-primary"
-                      style={{
-                        flexGrow: 1,
-                        padding: '6px 12px',
-                        fontSize: '0.8rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      Track <ArrowRight size={14} />
-                    </button>
-                  )}
                 </div>
               </div>
-            );
-          })
+              <a
+                href={skyscannerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn"
+                style={{
+                  padding: '6px 14px',
+                  fontSize: '0.8rem',
+                  background: 'linear-gradient(135deg, #00b4d8, #0077b6)',
+                  color: '#fff',
+                  fontWeight: 600,
+                  textDecoration: 'none'
+                }}
+              >
+                Compare on Skyscanner
+              </a>
+            </div>
+
+            {/* LISTINGS FILTER CONTROLS */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', fontSize: '0.85rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Sort:</span>
+                <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '6px', border: '1px solid var(--border-glass)', padding: '2px' }}>
+                  <button onClick={() => setSortKey('price')} style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', background: sortKey === 'price' ? 'var(--bg-secondary)' : 'transparent', color: sortKey === 'price' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer', fontSize: '0.75rem' }}>
+                    Cheapest
+                  </button>
+                  <button onClick={() => setSortKey('departureTime')} style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', background: sortKey === 'departureTime' ? 'var(--bg-secondary)' : 'transparent', color: sortKey === 'departureTime' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer', fontSize: '0.75rem' }}>
+                    Time
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Filter size={14} style={{ color: 'var(--text-secondary)' }} />
+                <select
+                  value={filterCarrier}
+                  onChange={(e) => setFilterCarrier(e.target.value)}
+                  style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-glass)', borderRadius: '6px', color: 'var(--text-primary)', padding: '4px 12px 4px 8px', fontFamily: 'var(--font-sans)', outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="ALL">All Carriers</option>
+                  {Object.keys(AIRLINES).map(code => (
+                    <option key={code} value={code}>{AIRLINES[code].name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* LISTINGS CARD GRID */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {sortedFlights.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-secondary)' }}>
+                  No flights available matching your carrier filter.
+                </div>
+              ) : (
+                sortedFlights.map((flight) => {
+                  const isCheapest = flight.price === cheapestPrice;
+                  const airline = AIRLINES[flight.airlineCode] || AIRLINES.LO;
+
+                  return (
+                    <div
+                      key={flight.id}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.01)',
+                        border: '1px solid var(--border-glass)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '18px 24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '20px',
+                        position: 'relative'
+                      }}
+                    >
+                      {/* Deal tag overlay */}
+                      {isCheapest && (
+                        <span style={{ position: 'absolute', top: '-10px', left: '16px', background: 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', padding: '2px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Sparkles size={10} /> Cheapest Deal
+                        </span>
+                      )}
+
+                      {/* Airline info */}
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', minWidth: '180px' }}>
+                        <div style={{ width: '38px', height: '38px', borderRadius: '8px', backgroundColor: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justify: 'center', fontSize: '1.2rem', border: '1px solid var(--border-glass)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {airline.logo}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem' }}>{flight.airlineName}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{flight.flightNumber} • {flight.planeType}</div>
+                        </div>
+                      </div>
+
+                      {/* Timeline */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', minWidth: '180px' }}>
+                        <div style={{ textAlign: 'left' }}>
+                          <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{flight.departureTime}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{flight.origin}</div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '60px' }}>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{flight.duration}</span>
+                          <div style={{ width: '50px', height: '1.5px', background: 'var(--border-glass)', margin: '4px 0', position: 'relative' }}>
+                            <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--text-muted)', position: 'absolute', top: '-1.2px', right: 0 }}></div>
+                          </div>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--success)', fontWeight: 600 }}>{flight.stops}</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{flight.arrivalTime}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{flight.destination}</div>
+                        </div>
+                      </div>
+
+                      {/* Fare display */}
+                      <div style={{ textAlign: 'center', minWidth: '120px' }}>
+                        <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--primary)' }}>
+                          ${flight.price}
+                        </div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                          per adult
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px', fontWeight: 600 }}>
+                          Total: ${flight.passengerCosts.total}
+                        </div>
+                      </div>
+
+                      {/* Select Leg button */}
+                      <div>
+                        {bookingStep === 1 ? (
+                          <button
+                            onClick={() => handleSelectOutbound(flight)}
+                            className="btn btn-primary"
+                            style={{ padding: '8px 16px', fontSize: '0.8rem' }}
+                          >
+                            Select Outbound
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleSelectReturn(flight)}
+                            className="btn btn-primary"
+                            style={{ padding: '8px 16px', fontSize: '0.8rem' }}
+                          >
+                            Select Return
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+          </div>
         )}
+
+        {/* STEP 3: BUNDLE CONFIRMATION FRAME */}
+        {bookingStep === 3 && selectedOutbound && selectedReturn && (
+          <div className="glass-panel animate-fade-in" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
+            
+            {/* Header info */}
+            <div style={{ textAlign: 'center' }}>
+              <span className="badge badge-success" style={{ padding: '4px 12px', fontSize: '0.75rem', marginBottom: '8px' }}>Roundtrip Configured</span>
+              <h4 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Confirm Your Roundtrip Bundle</h4>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                Review details and activate telemetry HUD maps
+              </p>
+            </div>
+
+            {/* Grid display outbound / return side-by-side */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '20px'
+            }}>
+              {/* Outbound Ticket Card */}
+              <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-glass)', borderRadius: 'var(--radius-sm)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase' }}>Outbound Leg</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{selectedOutbound.airlineName}</span>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{selectedOutbound.flightNumber}</span>
+                </div>
+                <div style={{ display: 'flex', justify: 'space-between', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)', padding: '10px', borderRadius: '4px' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{selectedOutbound.departureTime}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{selectedOutbound.origin}</div>
+                  </div>
+                  <ArrowRight size={14} style={{ color: 'var(--text-muted)' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{selectedOutbound.arrivalTime}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{selectedOutbound.destination}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <span>Date: {searchParams.departureDate}</span>
+                  <span>Duration: {selectedOutbound.duration}</span>
+                </div>
+              </div>
+
+              {/* Return Ticket Card */}
+              <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-glass)', borderRadius: 'var(--radius-sm)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 700, textTransform: 'uppercase' }}>Return Leg</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{selectedReturn.airlineName}</span>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{selectedReturn.flightNumber}</span>
+                </div>
+                <div style={{ display: 'flex', justify: 'space-between', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)', padding: '10px', borderRadius: '4px' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{selectedReturn.departureTime}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{selectedReturn.origin}</div>
+                  </div>
+                  <ArrowRight size={14} style={{ color: 'var(--text-muted)' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{selectedReturn.arrivalTime}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{selectedReturn.destination}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <span>Date: {searchParams.returnDate}</span>
+                  <span>Duration: {selectedReturn.duration}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Detailed passenger cost breakdown card */}
+            <div style={{
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-glass-bright)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '20px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>Passenger Pricing Details</div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                {/* Adults */}
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Adults ({searchParams.passengers.adults} × Outbound: ${selectedOutbound.price} + Return: ${selectedReturn.price})</span>
+                  <span style={{ color: '#fff', fontWeight: 600 }}>
+                    ${searchParams.passengers.adults * (selectedOutbound.price + selectedReturn.price)}
+                  </span>
+                </div>
+
+                {/* Children */}
+                {searchParams.passengers.children > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Children ({searchParams.passengers.children} × Outbound: ${selectedOutbound.passengerCosts.children / searchParams.passengers.children} + Return: ${selectedReturn.passengerCosts.children / searchParams.passengers.children})</span>
+                    <span style={{ color: '#fff', fontWeight: 600 }}>
+                      ${selectedOutbound.passengerCosts.children + selectedReturn.passengerCosts.children}
+                    </span>
+                  </div>
+                )}
+
+                {/* Infants */}
+                {searchParams.passengers.infants > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Infants ({searchParams.passengers.infants} × Outbound: ${selectedOutbound.passengerCosts.infants / searchParams.passengers.infants} + Return: ${selectedReturn.passengerCosts.infants / searchParams.passengers.infants})</span>
+                    <span style={{ color: '#fff', fontWeight: 600 }}>
+                      ${selectedOutbound.passengerCosts.infants + selectedReturn.passengerCosts.infants}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '10px', marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Total Combined Cost:</span>
+                <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)', filter: 'drop-shadow(0 0 6px var(--primary-glow-weak))' }}>
+                  ${selectedOutbound.passengerCosts.total + selectedReturn.passengerCosts.total}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Buttons Row */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '8px' }}>
+              <button 
+                onClick={() => {
+                  setSelectedReturn(null);
+                  setBookingStep(2);
+                }}
+                className="btn btn-secondary" 
+                style={{ minWidth: '150px' }}
+              >
+                Go Back
+              </button>
+              
+              <button 
+                onClick={handleConfirmBundle}
+                className="btn btn-primary" 
+                style={{ minWidth: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+              >
+                <Check size={16} /> Track Roundtrip Bundle
+              </button>
+            </div>
+
+          </div>
+        )}
+
       </div>
 
     </div>
