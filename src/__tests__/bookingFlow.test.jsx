@@ -1,0 +1,73 @@
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, test, expect } from 'vitest';
+import App from '../App';
+
+describe('Booking Flow Integration Tests', () => {
+  test('successfully performs search and completes booking flow step-by-step', async () => {
+    render(<App />);
+
+    // 1. Initially on Dashboard HUD
+    expect(screen.getByText('Dashboard HUD')).toBeInTheDocument();
+    
+    // 2. Navigate to "Find Flights" tab
+    const findFlightsTab = screen.getByText('Find Flights');
+    fireEvent.click(findFlightsTab);
+    
+    // Verify search panel is loaded
+    expect(screen.getByText('Roundtrip Flight Search')).toBeInTheDocument();
+
+    // Verify outbound flights are listed
+    const outboundButtons = screen.getAllByRole('button', { name: /Select Outbound/i });
+    expect(outboundButtons.length).toBe(4);
+
+    // 3. Select the first outbound leg flight
+    fireEvent.click(outboundButtons[0]);
+
+    // 4. Verify we transition to the Return Selection step
+    const returnButtons = screen.getAllByRole('button', { name: /Select Return/i });
+    expect(returnButtons.length).toBe(4);
+
+    // 5. Select the first return leg flight
+    fireEvent.click(returnButtons[0]);
+
+    // 6. Verify we transition to the Confirmation Bundle step
+    expect(screen.getByText('Confirm Your Roundtrip Bundle')).toBeInTheDocument();
+    expect(screen.getByText('Passenger Pricing Details')).toBeInTheDocument();
+    expect(screen.getByText('Track Roundtrip Bundle')).toBeInTheDocument();
+
+    // 7. Complete booking and start tracking
+    const trackButton = screen.getByText('Track Roundtrip Bundle');
+    fireEvent.click(trackButton);
+
+    // 8. Verify navigation back to Dashboard HUD tab
+    expect(screen.getByText('Dashboard HUD')).toHaveStyle({
+      color: 'var(--primary)'
+    });
+    
+    // Verify active route HUD displays the correct airports on Dashboard
+    expect(screen.getByText('Active Route')).toBeInTheDocument();
+  });
+
+  test('validates origin and destination cannot be identical', async () => {
+    render(<App />);
+
+    // Navigate to "Find Flights"
+    fireEvent.click(screen.getByText('Find Flights'));
+
+    // We can select the Departure Airport dropdown and change it to match Arrival
+    const departureSelect = screen.getByLabelText('Departure Airport');
+    const arrivalSelect = screen.getByLabelText('Arrival Airport');
+
+    // Select 'KRK' for both
+    fireEvent.change(departureSelect, { target: { value: 'KRK' } });
+    fireEvent.change(arrivalSelect, { target: { value: 'KRK' } });
+
+    // Submit form (Search button or form submit)
+    const searchForm = screen.getByText('Roundtrip Flight Search').closest('div').querySelector('form');
+    fireEvent.submit(searchForm);
+
+    // Check for error validation message
+    expect(screen.getByText('Departure and Arrival airports cannot be the same.')).toBeInTheDocument();
+  });
+});

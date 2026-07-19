@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Calendar, Filter, Sparkles, ArrowRight, Check, Globe, 
   Users, ChevronDown, User, ShieldAlert, ArrowLeftRight 
@@ -30,6 +30,20 @@ export default function AlternativeFlights({
   const [localAdults, setLocalAdults] = useState(searchParams.passengers.adults);
   const [localChildren, setLocalChildren] = useState(searchParams.passengers.children);
   const [localInfants, setLocalInfants] = useState(searchParams.passengers.infants);
+
+  const passengerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (passengerRef.current && !passengerRef.current.contains(event.target)) {
+        setShowPassengerDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Sorting & Filtering local states
   const [sortKey, setSortKey] = useState('price'); // 'price', 'departureTime'
@@ -178,10 +192,11 @@ export default function AlternativeFlights({
             gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
             gap: '16px'
           }}>
-            {/* Origin Select */}
+             {/* Origin Select */}
             <div className="input-group">
-              <label className="input-label">Departure Airport</label>
+              <label className="input-label" htmlFor="departure-airport-select">Departure Airport</label>
               <select
+                id="departure-airport-select"
                 value={localOrigin}
                 onChange={(e) => setLocalOrigin(e.target.value)}
                 className="input-field"
@@ -197,8 +212,9 @@ export default function AlternativeFlights({
 
             {/* Destination Select */}
             <div className="input-group">
-              <label className="input-label">Arrival Airport</label>
+              <label className="input-label" htmlFor="arrival-airport-select">Arrival Airport</label>
               <select
+                id="arrival-airport-select"
                 value={localDestination}
                 onChange={(e) => setLocalDestination(e.target.value)}
                 className="input-field"
@@ -237,7 +253,7 @@ export default function AlternativeFlights({
             </div>
 
             {/* Passengers Selector with Dropdown Overlay */}
-            <div className="input-group" style={{ position: 'relative' }}>
+            <div className="input-group" ref={passengerRef} style={{ position: 'relative' }}>
               <label className="input-label">Passengers</label>
               <button
                 type="button"
