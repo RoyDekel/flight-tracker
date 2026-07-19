@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Calendar, Filter, Sparkles, ArrowRight, Check, Globe, 
-  Users, ChevronDown, User, ShieldAlert, ArrowLeftRight 
+import {
+  Calendar, Filter, Sparkles, ArrowRight, Check, Globe,
+  Users, ChevronDown, User, ShieldAlert, ArrowLeftRight
 } from 'lucide-react';
 import { AIRPORTS, AIRLINES, generateFlightsForRoute, getSkyscannerUrl } from '../utils/flightSimulator';
 
-export default function AlternativeFlights({ 
-  selectedDate, 
-  setSelectedDate, 
-  activeFlight, 
+export default function AlternativeFlights({
+  selectedDate,
+  setSelectedDate,
+  activeFlight,
   setActiveFlight,
   onToggleWatchlist,
   watchlist,
@@ -24,7 +24,7 @@ export default function AlternativeFlights({
   const [localDestination, setLocalDestination] = useState(searchParams.destination);
   const [localDepDate, setLocalDepDate] = useState(searchParams.departureDate);
   const [localRetDate, setLocalRetDate] = useState(searchParams.returnDate);
-  
+
   // Passenger dropdown states
   const [showPassengerDropdown, setShowPassengerDropdown] = useState(false);
   const [localAdults, setLocalAdults] = useState(searchParams.passengers.adults);
@@ -68,9 +68,9 @@ export default function AlternativeFlights({
       setErrorMsg('Return date must be after the departure date.');
       return;
     }
-    
+
     setErrorMsg('');
-    
+
     // Update global search parameters
     const newParams = {
       origin: localOrigin,
@@ -83,9 +83,9 @@ export default function AlternativeFlights({
         infants: localInfants
       }
     };
-    
+
     setSearchParams(newParams);
-    
+
     // Reset booking flow
     setBookingStep(1);
     setSelectedOutbound(null);
@@ -94,18 +94,18 @@ export default function AlternativeFlights({
 
   // Generate lists based on search parameters
   const outboundFlights = generateFlightsForRoute(
-    searchParams.origin, 
-    searchParams.destination, 
-    searchParams.departureDate, 
-    'outbound', 
+    searchParams.origin,
+    searchParams.destination,
+    searchParams.departureDate,
+    'outbound',
     searchParams.passengers
   );
 
   const returnFlights = generateFlightsForRoute(
-    searchParams.destination, 
-    searchParams.origin, 
-    searchParams.returnDate, 
-    'return', 
+    searchParams.destination,
+    searchParams.origin,
+    searchParams.returnDate,
+    'return',
     searchParams.passengers
   );
 
@@ -127,8 +127,8 @@ export default function AlternativeFlights({
     return 0;
   });
 
-  const cheapestPrice = activeFlightList.length > 0 
-    ? Math.min(...activeFlightList.map(f => f.price)) 
+  const cheapestPrice = activeFlightList.length > 0
+    ? Math.min(...activeFlightList.map(f => f.price))
     : 0;
 
   // Selection handlers
@@ -154,13 +154,13 @@ export default function AlternativeFlights({
       departureDate: searchParams.departureDate,
       returnDate: searchParams.returnDate
     };
-    
+
     setActiveRoundtrip(roundtripBundle);
-    
+
     // Set active flight to outbound to display on map first
     setActiveFlight(selectedOutbound);
     setSelectedDate(searchParams.departureDate);
-    
+
     // Navigate to Dashboard HUD
     setActiveTab('dashboard');
   };
@@ -173,7 +173,7 @@ export default function AlternativeFlights({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
+
       {/* 1. DYNAMIC ROUNDTRIP SEARCH PANEL FRAME */}
       <div className="glass-panel" style={{ padding: '28px' }}>
         <h3 style={{ fontSize: '1.25rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -185,14 +185,14 @@ export default function AlternativeFlights({
         </p>
 
         <form onSubmit={handleSearch} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
+
           {/* Main inputs row */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
             gap: '16px'
           }}>
-             {/* Origin Select */}
+            {/* Origin Select */}
             <div className="input-group">
               <label className="input-label" htmlFor="departure-airport-select">Departure Airport</label>
               <select
@@ -231,8 +231,8 @@ export default function AlternativeFlights({
             {/* Departure Date */}
             <div className="input-group">
               <label className="input-label">Departure Date</label>
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={localDepDate}
                 onChange={(e) => setLocalDepDate(e.target.value)}
                 className="input-field"
@@ -243,8 +243,8 @@ export default function AlternativeFlights({
             {/* Return Date */}
             <div className="input-group">
               <label className="input-label">Return Date</label>
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={localRetDate}
                 onChange={(e) => setLocalRetDate(e.target.value)}
                 className="input-field"
@@ -299,11 +299,11 @@ export default function AlternativeFlights({
                       <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Adults</div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Age 12+</div>
                     </div>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="9" 
-                      value={localAdults} 
+                    <input
+                      type="number"
+                      min="1"
+                      max="9"
+                      value={localAdults}
                       onChange={(e) => setLocalAdults(Math.max(1, Number(e.target.value)))}
                       style={{ width: '50px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-glass)', borderRadius: '4px', color: '#fff', padding: '4px', textAlign: 'center' }}
                     />
@@ -315,11 +315,11 @@ export default function AlternativeFlights({
                       <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Children</div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Age 2-11</div>
                     </div>
-                    <input 
-                      type="number" 
-                      min="0" 
-                      max="9" 
-                      value={localChildren} 
+                    <input
+                      type="number"
+                      min="0"
+                      max="9"
+                      value={localChildren}
                       onChange={(e) => setLocalChildren(Math.max(0, Number(e.target.value)))}
                       style={{ width: '50px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-glass)', borderRadius: '4px', color: '#fff', padding: '4px', textAlign: 'center' }}
                     />
@@ -331,11 +331,11 @@ export default function AlternativeFlights({
                       <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Infants</div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Under age 2</div>
                     </div>
-                    <input 
-                      type="number" 
-                      min="0" 
-                      max="5" 
-                      value={localInfants} 
+                    <input
+                      type="number"
+                      min="0"
+                      max="5"
+                      value={localInfants}
                       onChange={(e) => setLocalInfants(Math.max(0, Number(e.target.value)))}
                       style={{ width: '50px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-glass)', borderRadius: '4px', color: '#fff', padding: '4px', textAlign: 'center' }}
                     />
@@ -373,7 +373,7 @@ export default function AlternativeFlights({
 
       {/* 2. DWO-STEP BOOKING SELECTION FLOW */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        
+
         {/* Step Indicator Header */}
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'var(--bg-secondary)', border: '1px solid var(--border-glass)', borderRadius: 'var(--radius-sm)', padding: '12px 16px' }}>
           {[
@@ -413,7 +413,7 @@ export default function AlternativeFlights({
         {/* STEP 1 & 2: LISTINGS VIEW */}
         {(bookingStep === 1 || bookingStep === 2) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            
+
             {/* Show Selected Outbound in Step 2 Header */}
             {bookingStep === 2 && selectedOutbound && (
               <div className="glass-panel" style={{ background: 'rgba(5, 150, 105, 0.04)', borderColor: 'rgba(5, 150, 105, 0.25)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
@@ -426,12 +426,12 @@ export default function AlternativeFlights({
                     Route: {selectedOutbound.origin} → {selectedOutbound.destination} • Fare: ${selectedOutbound.price} / adult
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={() => {
                     setSelectedOutbound(null);
                     setBookingStep(1);
                   }}
-                  className="btn btn-secondary" 
+                  className="btn btn-secondary"
                   style={{ padding: '6px 12px', fontSize: '0.75rem' }}
                 >
                   Change Outbound
@@ -618,7 +618,7 @@ export default function AlternativeFlights({
         {/* STEP 3: BUNDLE CONFIRMATION FRAME */}
         {bookingStep === 3 && selectedOutbound && selectedReturn && (
           <div className="glass-panel animate-fade-in" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
-            
+
             {/* Header info */}
             <div style={{ textAlign: 'center' }}>
               <span className="badge badge-success" style={{ padding: '4px 12px', fontSize: '0.75rem', marginBottom: '8px' }}>Roundtrip Configured</span>
@@ -694,7 +694,7 @@ export default function AlternativeFlights({
               gap: '12px'
             }}>
               <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>Passenger Pricing Details</div>
-              
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                 {/* Adults */}
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -735,20 +735,20 @@ export default function AlternativeFlights({
 
             {/* Action Buttons Row */}
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '8px' }}>
-              <button 
+              <button
                 onClick={() => {
                   setSelectedReturn(null);
                   setBookingStep(2);
                 }}
-                className="btn btn-secondary" 
+                className="btn btn-secondary"
                 style={{ minWidth: '150px' }}
               >
                 Go Back
               </button>
-              
-              <button 
+
+              <button
                 onClick={handleConfirmBundle}
-                className="btn btn-primary" 
+                className="btn btn-primary"
                 style={{ minWidth: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
               >
                 <Check size={16} /> Track Roundtrip Bundle
