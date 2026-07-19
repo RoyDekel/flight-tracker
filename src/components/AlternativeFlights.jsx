@@ -175,7 +175,7 @@ export default function AlternativeFlights({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
 
       {/* 1. DYNAMIC ROUNDTRIP SEARCH PANEL FRAME */}
-      <div className="glass-panel" style={{ padding: '28px' }}>
+      <div className="glass-panel" style={{ padding: '28px', overflow: 'visible' }}>
         <h3 style={{ fontSize: '1.25rem', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Globe size={20} style={{ color: 'var(--primary)' }} />
           Roundtrip Flight Search
