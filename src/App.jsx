@@ -110,6 +110,47 @@ export default function App() {
     destinationAirport.coords
   );
 
+  // Fetch initial default flights from the server to align with the client-server pattern
+  useEffect(() => {
+    let active = true;
+    const fetchDefaultFlights = async () => {
+      try {
+        const queryParams = new URLSearchParams({
+          origin: 'TLV',
+          destination: 'KRK',
+          departureDate: '2026-08-11',
+          returnDate: '2026-08-16',
+          adults: '1',
+          children: '0',
+          infants: '0'
+        });
+        const origin = typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'http://localhost:3001';
+        const res = await fetch(`${origin}/api/flights?${queryParams.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (active && data.outbound?.length && data.return?.length) {
+            setActiveRoundtrip({
+              outbound: data.outbound[0],
+              return: data.return[0],
+              passengers: { adults: 1, children: 0, infants: 0 },
+              origin: 'TLV',
+              destination: 'KRK',
+              departureDate: '2026-08-11',
+              returnDate: '2026-08-16'
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch initial flights from server, sticking with local simulation defaults:", err);
+      }
+    };
+    
+    fetchDefaultFlights();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Sync to LocalStorage
   useEffect(() => {
     localStorage.setItem('watchlist', JSON.stringify(watchlist));
@@ -345,7 +386,7 @@ export default function App() {
               padding: '8px 14px',
               borderRadius: '6px',
               border: 'none',
-              background: direction === 'outbound' ? 'var(--bg-tertiary)' : 'transparent',
+              backgroundColor: direction === 'outbound' ? 'var(--bg-tertiary)' : 'transparent',
               color: direction === 'outbound' ? 'var(--primary)' : 'var(--text-secondary)',
               fontWeight: 600,
               fontSize: '0.8rem',
@@ -364,7 +405,7 @@ export default function App() {
               padding: '8px 14px',
               borderRadius: '6px',
               border: 'none',
-              background: direction === 'return' ? 'var(--bg-tertiary)' : 'transparent',
+              backgroundColor: direction === 'return' ? 'var(--bg-tertiary)' : 'transparent',
               color: direction === 'return' ? 'var(--primary)' : 'var(--text-secondary)',
               fontWeight: 600,
               fontSize: '0.8rem',
@@ -427,7 +468,7 @@ export default function App() {
               onClick={() => setActiveTab(tab.id)}
               className="btn"
               style={{
-                background: isActive ? 'var(--bg-tertiary)' : 'transparent',
+                backgroundColor: isActive ? 'var(--bg-tertiary)' : 'transparent',
                 color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
                 border: isActive ? '1px solid var(--border-glass-bright)' : '1px solid transparent',
                 borderRadius: 'var(--radius-sm)',

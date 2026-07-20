@@ -57,6 +57,73 @@ export default function AlternativeFlights({
   // Error validation states
   const [errorMsg, setErrorMsg] = useState('');
 
+  // State for flights retrieved from server
+  const [outboundFlights, setOutboundFlights] = useState(() =>
+    generateFlightsForRoute(
+      searchParams.origin,
+      searchParams.destination,
+      searchParams.departureDate,
+      'outbound',
+      searchParams.passengers
+    )
+  );
+  const [returnFlights, setReturnFlights] = useState(() =>
+    generateFlightsForRoute(
+      searchParams.destination,
+      searchParams.origin,
+      searchParams.returnDate,
+      'return',
+      searchParams.passengers
+    )
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
+
+  // Fetch flights when search parameters change
+  useEffect(() => {
+    let active = true;
+    const fetchFlights = async () => {
+      setIsLoading(true);
+      setApiError('');
+      try {
+        const queryParams = new URLSearchParams({
+          origin: searchParams.origin,
+          destination: searchParams.destination,
+          departureDate: searchParams.departureDate,
+          returnDate: searchParams.returnDate,
+          adults: searchParams.passengers.adults,
+          children: searchParams.passengers.children,
+          infants: searchParams.passengers.infants
+        });
+        const origin = typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'http://localhost:3001';
+        const res = await fetch(`${origin}/api/flights?${queryParams.toString()}`);
+        if (!res.ok) {
+          throw new Error(`Server returned status ${res.status}`);
+        }
+        
+        const data = await res.json();
+        if (active) {
+          setOutboundFlights(data.outbound || []);
+          setReturnFlights(data.return || []);
+        }
+      } catch (err) {
+        if (active) {
+          setApiError(err.message || 'An error occurred while fetching flights.');
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchFlights();
+    
+    return () => {
+      active = false;
+    };
+  }, [searchParams]);
+
   // Handle Search Submission
   const handleSearch = (e) => {
     e.preventDefault();
@@ -91,23 +158,6 @@ export default function AlternativeFlights({
     setSelectedOutbound(null);
     setSelectedReturn(null);
   };
-
-  // Generate lists based on search parameters
-  const outboundFlights = generateFlightsForRoute(
-    searchParams.origin,
-    searchParams.destination,
-    searchParams.departureDate,
-    'outbound',
-    searchParams.passengers
-  );
-
-  const returnFlights = generateFlightsForRoute(
-    searchParams.destination,
-    searchParams.origin,
-    searchParams.returnDate,
-    'return',
-    searchParams.passengers
-  );
 
   // Get active list depending on current step
   const activeFlightList = bookingStep === 1 ? outboundFlights : returnFlights;
@@ -511,7 +561,18 @@ export default function AlternativeFlights({
 
             {/* LISTINGS CARD GRID */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {sortedFlights.length === 0 ? (
+              {isLoading && activeFlightList.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '50px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                  <div className="pulse-target" style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'var(--primary)' }}></div>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Searching live itineraries from server...</span>
+                </div>
+              ) : apiError ? (
+                <div style={{ textAlign: 'center', padding: '30px', backgroundColor: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: 'var(--radius-sm)', color: '#f87171', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                  <ShieldAlert size={24} />
+                  <span style={{ fontWeight: 600 }}>Error loading flights</span>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{apiError}</span>
+                </div>
+              ) : sortedFlights.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-secondary)' }}>
                   No flights available matching your carrier filter.
                 </div>

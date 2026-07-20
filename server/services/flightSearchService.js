@@ -1,0 +1,74 @@
+import { SimulatedProvider } from '../providers/simulatedProvider.js';
+import { KiwiProvider } from '../providers/kiwiProvider.js';
+import { TravelPayoutsProvider } from '../providers/travelpayoutsProvider.js';
+import { SerpApiProvider } from '../providers/serpapiProvider.js';
+
+export class FlightSearchService {
+  constructor() {
+    this.providers = {
+      simulated: new SimulatedProvider(),
+      kiwi: new KiwiProvider(),
+      travelpayouts: new TravelPayoutsProvider(),
+      serpapi: new SerpApiProvider()
+    };
+    
+    this.activeProviderName = this.determineActiveProvider();
+    this.activeProvider = this.providers[this.activeProviderName] || this.providers.simulated;
+    
+    console.log(`===============================================`);
+    console.log(` FlightSearchService Initialized`);
+    console.log(` Active Strategy Provider: [${this.activeProviderName.toUpperCase()}]`);
+    console.log(`===============================================`);
+  }
+
+  determineActiveProvider() {
+    const configProvider = process.env.FLIGHT_PROVIDER;
+    
+    // 1. Explicitly configured provider choice
+    if (configProvider && this.providers[configProvider.toLowerCase()]) {
+      return configProvider.toLowerCase();
+    }
+    
+    // 2. Autodetect based on available API Keys
+    if (process.env.SERPAPI_KEY && process.env.SERPAPI_KEY.trim() !== '') {
+      return 'serpapi';
+    }
+
+    if (process.env.KIWI_API_KEY && process.env.KIWI_API_KEY.trim() !== '') {
+      return 'kiwi';
+    }
+    
+    if (process.env.TRAVELPAYOUTS_TOKEN && process.env.TRAVELPAYOUTS_TOKEN.trim() !== '') {
+      return 'travelpayouts';
+    }
+    
+    // 3. Fallback
+    return 'simulated';
+  }
+
+  async searchFlights(searchRequest) {
+    try {
+      console.log(`[FlightSearchService] Delegating search to provider: ${this.activeProviderName.toUpperCase()}`);
+      return await this.activeProvider.searchAsync(searchRequest);
+    } catch (error) {
+      console.error(`[FlightSearchService] Strategy [${this.activeProviderName.toUpperCase()}] failed:`, error.message || error);
+      
+      // Error boundary: fallback to local simulation
+      if (this.activeProviderName !== 'simulated') {
+        console.warn(`[FlightSearchService] Falling back to SIMULATED strategy provider to guarantee service availability.`);
+        try {
+          const results = await this.providers.simulated.searchAsync(searchRequest);
+          return {
+            ...results,
+            warning: `${this.activeProviderName.toUpperCase()} provider error. Displaying simulated backup flights.`
+          };
+        } catch (simError) {
+          console.error(`[FlightSearchService] Fallback provider also failed:`, simError);
+          throw simError;
+        }
+      }
+      
+      throw error;
+    }
+  }
+}
