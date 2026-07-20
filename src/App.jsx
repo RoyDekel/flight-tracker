@@ -124,8 +124,8 @@ export default function App() {
           children: '0',
           infants: '0'
         });
-        const origin = typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'http://localhost:3001';
-        const res = await fetch(`${origin}/api/flights?${queryParams.toString()}`);
+        const apiBase = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'http://localhost:3001');
+        const res = await fetch(`${apiBase}/api/flights?${queryParams.toString()}`);
         if (res.ok) {
           const data = await res.json();
           if (active && data.outbound?.length && data.return?.length) {

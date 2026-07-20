@@ -95,8 +95,8 @@ export default function AlternativeFlights({
           children: searchParams.passengers.children,
           infants: searchParams.passengers.infants
         });
-        const origin = typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'http://localhost:3001';
-        const res = await fetch(`${origin}/api/flights?${queryParams.toString()}`);
+        const apiBase = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'http://localhost:3001');
+        const res = await fetch(`${apiBase}/api/flights?${queryParams.toString()}`);
         if (!res.ok) {
           throw new Error(`Server returned status ${res.status}`);
         }
