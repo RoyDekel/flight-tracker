@@ -123,7 +123,8 @@ export class KiwiProvider extends FlightProvider {
       const codeHash = (airlineCode.charCodeAt(0) || 0) + (airlineCode.charCodeAt(1) || 0);
       const reliability = `${88 + (codeHash % 10)}% On-Time`;
 
-      const stopsVal = route.length === 1 ? 'Direct' : `${route.length - 1} stop(s)`;
+      const stopsCount = route.length - 1;
+      const stopsVal = stopsCount <= 0 ? 'Direct' : `${stopsCount} stop${stopsCount > 1 ? 's' : ''}`;
 
       const originAirport = AIRPORTS[originCode];
       const destAirport = AIRPORTS[destinationCode];

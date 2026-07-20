@@ -18,8 +18,8 @@ export default function App() {
   const [searchParams, setSearchParams] = useState({
     origin: 'TLV',
     destination: '',
-    departureDate: '2026-08-11',
-    returnDate: '2026-08-16',
+    departureDate: '',
+    returnDate: '',
     passengers: {
       adults: 1,
       children: 0,

@@ -21,6 +21,12 @@ describe('Booking Flow Integration Tests', () => {
     const arrivalSelect = screen.getByLabelText('Arrival Airport');
     fireEvent.change(arrivalSelect, { target: { value: 'KRK' } });
 
+    // Set Departure Date & Return Date
+    const departureDateInput = screen.getByPlaceholderText('Departure');
+    const returnDateInput = screen.getByPlaceholderText('Return');
+    fireEvent.change(departureDateInput, { target: { value: '2026-08-11' } });
+    fireEvent.change(returnDateInput, { target: { value: '2026-08-16' } });
+
     // Click Search Flights
     const searchButton = screen.getByRole('button', { name: /Search Flights/i });
     fireEvent.click(searchButton);

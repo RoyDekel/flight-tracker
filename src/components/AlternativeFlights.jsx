@@ -19,6 +19,14 @@ export default function AlternativeFlights({
   setActiveRoundtrip,
   setActiveTab
 }) {
+  const getLocalDateString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Search inputs local states
   const [localOrigin, setLocalOrigin] = useState(searchParams.origin);
   const [localDestination, setLocalDestination] = useState(searchParams.destination);
@@ -168,6 +176,14 @@ export default function AlternativeFlights({
       setErrorMsg('Departure and Arrival airports cannot be the same.');
       return;
     }
+    if (!localDepDate) {
+      setErrorMsg('Please select a departure date.');
+      return;
+    }
+    if (!localRetDate) {
+      setErrorMsg('Please select a return date.');
+      return;
+    }
     if (new Date(localRetDate) <= new Date(localDepDate)) {
       setErrorMsg('Return date must be after the departure date.');
       return;
@@ -206,11 +222,25 @@ export default function AlternativeFlights({
     return flight.airlineName === filterCarrier;
   });
 
+  const parseTimeToMinutes = (timeStr) => {
+    if (!timeStr) return 0;
+    const match = timeStr.match(/(\d{1,2}):(\d{2})(?:\s*(AM|PM))?/i);
+    if (!match) return 0;
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const ampm = match[3];
+    if (ampm) {
+      if (ampm.toUpperCase() === 'PM' && hours < 12) hours += 12;
+      if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
+    }
+    return hours * 60 + minutes;
+  };
+
   const sortedFlights = [...filteredFlights].sort((a, b) => {
     if (sortKey === 'price') {
       return a.price - b.price;
     } else if (sortKey === 'departureTime') {
-      return a.departureTime.localeCompare(b.departureTime);
+      return parseTimeToMinutes(a.departureTime) - parseTimeToMinutes(b.departureTime);
     }
     return 0;
   });
@@ -292,7 +322,12 @@ export default function AlternativeFlights({
                 value={localOrigin}
                 onChange={(e) => setLocalOrigin(e.target.value)}
                 className="input-field"
-                style={{ cursor: 'pointer' }}
+                style={{
+                  cursor: 'pointer',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none'
+                }}
               >
                 {Object.keys(AIRPORTS).map(code => (
                   <option key={code} value={code}>
@@ -310,7 +345,12 @@ export default function AlternativeFlights({
                 value={localDestination}
                 onChange={(e) => setLocalDestination(e.target.value)}
                 className="input-field"
-                style={{ cursor: 'pointer' }}
+                style={{
+                  cursor: 'pointer',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none'
+                }}
               >
                 <option value="" disabled hidden>Select a destination</option>
                 {Object.keys(AIRPORTS).map(code => (
@@ -325,11 +365,23 @@ export default function AlternativeFlights({
             <div className="input-group">
               <label className="input-label">Departure Date</label>
               <input
-                type="date"
+                type={localDepDate ? "date" : "text"}
+                placeholder="Departure"
                 value={localDepDate}
+                onFocus={(e) => {
+                  e.target.type = "date";
+                  try {
+                    e.target.showPicker();
+                  } catch (err) {}
+                }}
+                onBlur={(e) => {
+                  if (!localDepDate) {
+                    e.target.type = "text";
+                  }
+                }}
                 onChange={(e) => setLocalDepDate(e.target.value)}
                 className="input-field"
-                min="2026-06-22"
+                min={getLocalDateString()}
               />
             </div>
 
@@ -337,11 +389,23 @@ export default function AlternativeFlights({
             <div className="input-group">
               <label className="input-label">Return Date</label>
               <input
-                type="date"
+                type={localRetDate ? "date" : "text"}
+                placeholder="Return"
                 value={localRetDate}
+                onFocus={(e) => {
+                  e.target.type = "date";
+                  try {
+                    e.target.showPicker();
+                  } catch (err) {}
+                }}
+                onBlur={(e) => {
+                  if (!localRetDate) {
+                    e.target.type = "text";
+                  }
+                }}
                 onChange={(e) => setLocalRetDate(e.target.value)}
                 className="input-field"
-                min={localDepDate || "2026-06-22"}
+                min={localDepDate || getLocalDateString()}
               />
             </div>
 
@@ -666,18 +730,18 @@ export default function AlternativeFlights({
                       )}
 
                       {/* Airline info */}
-                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', minWidth: '180px' }}>
-                        <div style={{ width: '38px', height: '38px', borderRadius: '8px', backgroundColor: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justify: 'center', fontSize: '1.2rem', border: '1px solid var(--border-glass)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flex: '1 1 200px', minWidth: '160px', maxWidth: '260px' }}>
+                        <div style={{ width: '38px', height: '38px', borderRadius: '8px', backgroundColor: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', border: '1px solid var(--border-glass)', flexShrink: 0 }}>
                           {airline.logo}
                         </div>
-                        <div>
-                          <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem' }}>{flight.airlineName}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{flight.flightNumber} • {flight.planeType}</div>
+                        <div style={{ overflow: 'hidden' }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{flight.airlineName}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{flight.flightNumber} • {flight.planeType}</div>
                         </div>
                       </div>
 
                       {/* Timeline */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', minWidth: '180px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: '1 1 220px', minWidth: '180px', maxWidth: '280px', justifyContent: 'center' }}>
                         <div style={{ textAlign: 'left' }}>
                           <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{flight.departureTime}</div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{flight.origin}</div>
@@ -696,7 +760,7 @@ export default function AlternativeFlights({
                       </div>
 
                       {/* Fare display */}
-                      <div style={{ textAlign: 'center', minWidth: '120px' }}>
+                      <div style={{ textAlign: 'center', flex: '0 0 120px' }}>
                         <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--primary)' }}>
                           ${flight.price}
                         </div>
@@ -709,7 +773,7 @@ export default function AlternativeFlights({
                       </div>
 
                       {/* Select Leg button */}
-                      <div>
+                      <div style={{ flex: '0 0 auto' }}>
                         {bookingStep === 1 ? (
                           <button
                             onClick={() => handleSelectOutbound(flight)}

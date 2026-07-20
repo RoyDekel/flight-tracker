@@ -120,7 +120,7 @@ export class SerpApiProvider extends FlightProvider {
       const reliability = `${88 + (codeHash % 10)}% On-Time`;
 
       const stopsCount = segments.length - 1;
-      const stopsVal = stopsCount <= 0 ? 'Direct' : `${stopsCount} stop(s)`;
+      const stopsVal = stopsCount <= 0 ? 'Direct' : `${stopsCount} stop${stopsCount > 1 ? 's' : ''}`;
 
       const originAirport = AIRPORTS[originCode];
       const destAirport = AIRPORTS[destinationCode];
