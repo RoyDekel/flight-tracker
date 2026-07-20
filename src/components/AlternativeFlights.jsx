@@ -24,6 +24,7 @@ export default function AlternativeFlights({
   const [localDestination, setLocalDestination] = useState(searchParams.destination);
   const [localDepDate, setLocalDepDate] = useState(searchParams.departureDate);
   const [localRetDate, setLocalRetDate] = useState(searchParams.returnDate);
+  const [localStops, setLocalStops] = useState(searchParams.stops || '0');
 
   // Passenger dropdown states
   const [showPassengerDropdown, setShowPassengerDropdown] = useState(false);
@@ -57,32 +58,49 @@ export default function AlternativeFlights({
   // Error validation states
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+
   // State for flights retrieved from server
   const [outboundFlights, setOutboundFlights] = useState(() =>
-    generateFlightsForRoute(
-      searchParams.origin,
-      searchParams.destination,
-      searchParams.departureDate,
-      'outbound',
-      searchParams.passengers
-    )
+    searchParams.destination
+      ? generateFlightsForRoute(
+          searchParams.origin,
+          searchParams.destination,
+          searchParams.departureDate,
+          'outbound',
+          searchParams.passengers
+        )
+      : []
   );
   const [returnFlights, setReturnFlights] = useState(() =>
-    generateFlightsForRoute(
-      searchParams.destination,
-      searchParams.origin,
-      searchParams.returnDate,
-      'return',
-      searchParams.passengers
-    )
+    searchParams.destination
+      ? generateFlightsForRoute(
+          searchParams.destination,
+          searchParams.origin,
+          searchParams.returnDate,
+          'return',
+          searchParams.passengers
+        )
+      : []
   );
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [bookingStep, searchParams, filterCarrier, sortKey]);
 
   // Fetch flights when search parameters change
   useEffect(() => {
     let active = true;
     const fetchFlights = async () => {
+      if (!searchParams.destination) {
+        setOutboundFlights([]);
+        setReturnFlights([]);
+        setIsLoading(false);
+        return;
+      }
       setIsLoading(true);
       setApiError('');
       try {
@@ -93,7 +111,8 @@ export default function AlternativeFlights({
           returnDate: searchParams.returnDate,
           adults: searchParams.passengers.adults,
           children: searchParams.passengers.children,
-          infants: searchParams.passengers.infants
+          infants: searchParams.passengers.infants,
+          stops: searchParams.stops || '0'
         });
         const apiBase = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'http://localhost:3001');
         const res = await fetch(`${apiBase}/api/flights?${queryParams.toString()}`);
@@ -108,7 +127,21 @@ export default function AlternativeFlights({
         }
       } catch (err) {
         if (active) {
-          setApiError(err.message || 'An error occurred while fetching flights.');
+          console.warn("Failed to fetch flights from server, falling back to local simulation:", err);
+          setOutboundFlights(generateFlightsForRoute(
+            searchParams.origin,
+            searchParams.destination,
+            searchParams.departureDate,
+            'outbound',
+            searchParams.passengers
+          ));
+          setReturnFlights(generateFlightsForRoute(
+            searchParams.destination,
+            searchParams.origin,
+            searchParams.returnDate,
+            'return',
+            searchParams.passengers
+          ));
         }
       } finally {
         if (active) {
@@ -127,6 +160,10 @@ export default function AlternativeFlights({
   // Handle Search Submission
   const handleSearch = (e) => {
     e.preventDefault();
+    if (!localDestination) {
+      setErrorMsg('Please select a destination.');
+      return;
+    }
     if (localOrigin === localDestination) {
       setErrorMsg('Departure and Arrival airports cannot be the same.');
       return;
@@ -148,7 +185,8 @@ export default function AlternativeFlights({
         adults: localAdults,
         children: localChildren,
         infants: localInfants
-      }
+      },
+      stops: localStops
     };
 
     setSearchParams(newParams);
@@ -165,7 +203,7 @@ export default function AlternativeFlights({
   // Filter & Sort flights
   const filteredFlights = activeFlightList.filter(flight => {
     if (filterCarrier === 'ALL') return true;
-    return flight.airlineCode === filterCarrier;
+    return flight.airlineName === filterCarrier;
   });
 
   const sortedFlights = [...filteredFlights].sort((a, b) => {
@@ -176,6 +214,10 @@ export default function AlternativeFlights({
     }
     return 0;
   });
+
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.ceil(sortedFlights.length / ITEMS_PER_PAGE);
+  const paginatedFlights = sortedFlights.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   const cheapestPrice = activeFlightList.length > 0
     ? Math.min(...activeFlightList.map(f => f.price))
@@ -270,6 +312,7 @@ export default function AlternativeFlights({
                 className="input-field"
                 style={{ cursor: 'pointer' }}
               >
+                <option value="" disabled hidden>Select a destination</option>
                 {Object.keys(AIRPORTS).map(code => (
                   <option key={code} value={code}>
                     {AIRPORTS[code].city} ({AIRPORTS[code].code}) - {AIRPORTS[code].country}
@@ -412,8 +455,22 @@ export default function AlternativeFlights({
             </div>
           )}
 
-          {/* Search Button Container */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
+          {/* Direct flights checkbox and Search Button Container */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap', gap: '12px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              <input
+                type="checkbox"
+                checked={localStops === '1'}
+                onChange={(e) => setLocalStops(e.target.checked ? '1' : '0')}
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  accentColor: 'var(--primary)',
+                  cursor: 'pointer'
+                }}
+              />
+              <span>Direct flights only</span>
+            </label>
             <button type="submit" className="btn btn-primary" style={{ minWidth: '180px', padding: '12px' }}>
               Search Flights
             </button>
@@ -552,8 +609,8 @@ export default function AlternativeFlights({
                   style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-glass)', borderRadius: '6px', color: 'var(--text-primary)', padding: '4px 12px 4px 8px', fontFamily: 'var(--font-sans)', outline: 'none', cursor: 'pointer' }}
                 >
                   <option value="ALL">All Carriers</option>
-                  {Object.keys(AIRLINES).map(code => (
-                    <option key={code} value={code}>{AIRLINES[code].name}</option>
+                  {Array.from(new Set(activeFlightList.map(f => f.airlineName))).map(name => (
+                    <option key={name} value={name}>{name}</option>
                   ))}
                 </select>
               </div>
@@ -561,7 +618,11 @@ export default function AlternativeFlights({
 
             {/* LISTINGS CARD GRID */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {isLoading && activeFlightList.length === 0 ? (
+              {!searchParams.destination ? (
+                <div style={{ textAlign: 'center', padding: '50px 0', color: 'var(--text-secondary)' }}>
+                  Please select a destination airport above and click "Search Flights" to find listings.
+                </div>
+              ) : isLoading ? (
                 <div style={{ textAlign: 'center', padding: '50px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
                   <div className="pulse-target" style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'var(--primary)' }}></div>
                   <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Searching live itineraries from server...</span>
@@ -572,12 +633,12 @@ export default function AlternativeFlights({
                   <span style={{ fontWeight: 600 }}>Error loading flights</span>
                   <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{apiError}</span>
                 </div>
-              ) : sortedFlights.length === 0 ? (
+              ) : paginatedFlights.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-secondary)' }}>
                   No flights available matching your carrier filter.
                 </div>
               ) : (
-                sortedFlights.map((flight) => {
+                paginatedFlights.map((flight) => {
                   const isCheapest = flight.price === cheapestPrice;
                   const airline = AIRLINES[flight.airlineCode] || AIRLINES.LO;
 
@@ -672,6 +733,68 @@ export default function AlternativeFlights({
                 })
               )}
             </div>
+
+            {/* PAGINATION CONTROLS */}
+            {totalPages > 1 && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '8px',
+                marginTop: '24px',
+                paddingTop: '16px',
+                borderTop: '1px solid var(--border-glass)'
+              }}>
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  className="btn btn-secondary"
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '0.8rem',
+                    opacity: currentPage === 1 ? 0.5 : 1,
+                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Previous
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button
+                    type="button"
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className="btn"
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '0.8rem',
+                      backgroundColor: currentPage === page ? 'var(--primary)' : 'var(--bg-tertiary)',
+                      color: currentPage === page ? '#0b0f19' : 'var(--text-secondary)',
+                      border: currentPage === page ? '1px solid var(--primary)' : '1px solid var(--border-glass)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontWeight: currentPage === page ? '600' : 'normal',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  className="btn btn-secondary"
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '0.8rem',
+                    opacity: currentPage === totalPages ? 0.5 : 1,
+                    cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
 
           </div>
         )}

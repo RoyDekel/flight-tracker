@@ -1,8 +1,8 @@
 import { FlightProvider } from './flightProvider.js';
-import { 
-  AIRPORTS, 
-  getDistance, 
-  calculatePassengerCost 
+import {
+  AIRPORTS,
+  getDistance,
+  calculatePassengerCost
 } from './constants.js';
 
 export class SerpApiProvider extends FlightProvider {
@@ -12,22 +12,22 @@ export class SerpApiProvider extends FlightProvider {
   }
 
   async searchAsync(searchRequest) {
-    const { origin, destination, departureDate, returnDate, passengers } = searchRequest;
+    const { origin, destination, departureDate, returnDate, passengers, stops } = searchRequest;
 
     if (!this.apiKey || this.apiKey.trim() === '') {
       throw new Error("SerpAPI key is missing in environment.");
     }
 
-    console.log(`[SerpApiProvider] Querying outbound: ${origin} -> ${destination} on ${departureDate}`);
-    const outboundOffers = await this.fetchSerpApiOffers(origin, destination, departureDate);
+    console.log(`[SerpApiProvider] Querying outbound: ${origin} -> ${destination} on ${departureDate} with stops: ${stops}`);
+    const outboundOffers = await this.fetchSerpApiOffers(origin, destination, departureDate, stops);
     const outboundFlights = outboundOffers
       .map(offer => this.mapSerpApiToFlight(offer, 'outbound', passengers))
       .filter(Boolean);
 
     let returnFlights = [];
     if (returnDate) {
-      console.log(`[SerpApiProvider] Querying return: ${destination} -> ${origin} on ${returnDate}`);
-      const returnOffers = await this.fetchSerpApiOffers(destination, origin, returnDate);
+      console.log(`[SerpApiProvider] Querying return: ${destination} -> ${origin} on ${returnDate} with stops: ${stops}`);
+      const returnOffers = await this.fetchSerpApiOffers(destination, origin, returnDate, stops);
       returnFlights = returnOffers
         .map(offer => this.mapSerpApiToFlight(offer, 'return', passengers))
         .filter(Boolean);
@@ -39,8 +39,8 @@ export class SerpApiProvider extends FlightProvider {
     };
   }
 
-  async fetchSerpApiOffers(dep, arr, dateStr) {
-    const queryParams = new URLSearchParams({
+  async fetchSerpApiOffers(dep, arr, dateStr, stops) {
+    const params = {
       engine: 'google_flights',
       departure_id: dep,
       arrival_id: arr,
@@ -49,7 +49,13 @@ export class SerpApiProvider extends FlightProvider {
       currency: 'USD',
       hl: 'en',
       api_key: this.apiKey.trim()
-    });
+    };
+
+    if (stops && stops !== '0') {
+      params.stops = stops;
+    }
+
+    const queryParams = new URLSearchParams(params);
 
     const url = `https://serpapi.com/search.json?${queryParams.toString()}`;
     const response = await fetch(url);
@@ -60,7 +66,7 @@ export class SerpApiProvider extends FlightProvider {
     }
 
     const resData = await response.json();
-    
+
     // Combine best flights and other flights list
     const bestFlights = resData.best_flights || [];
     const otherFlights = resData.other_flights || [];
@@ -75,7 +81,7 @@ export class SerpApiProvider extends FlightProvider {
       if (!firstSegment || !lastSegment) return null;
 
       const airlineName = firstSegment.airline || 'LOT Polish Airlines';
-      
+
       // Determine airline code and flight number
       const flightNum = firstSegment.flight_number || 'LO 101';
       const airlineCode = flightNum.split(' ')[0] || 'LO';
@@ -91,7 +97,7 @@ export class SerpApiProvider extends FlightProvider {
       const arrTimeStr = getHourMinute(lastSegment.arrival_airport?.time);
 
       // Duration is returned in minutes
-      const durationMins = offer.duration || 120;
+      const durationMins = offer.total_duration || 120;
       const durationHours = Math.floor(durationMins / 60);
       const durationRemMins = durationMins % 60;
       const durationStr = `${durationHours}h ${durationRemMins}m`;
@@ -105,7 +111,7 @@ export class SerpApiProvider extends FlightProvider {
 
       const originCode = firstSegment.departure_airport?.id || depTimeStr;
       const destinationCode = lastSegment.arrival_airport?.id || arrTimeStr;
-      
+
       const originTerminal = firstSegment.departure_airport?.terminal ? ` T${firstSegment.departure_airport.terminal}` : '';
       const destTerminal = lastSegment.arrival_airport?.terminal ? ` T${lastSegment.arrival_airport.terminal}` : '';
       const terminalStr = `${originCode}${originTerminal} → ${destinationCode}${destTerminal}`;
@@ -113,7 +119,8 @@ export class SerpApiProvider extends FlightProvider {
       const codeHash = (airlineCode.charCodeAt(0) || 0) + (airlineCode.charCodeAt(1) || 0);
       const reliability = `${88 + (codeHash % 10)}% On-Time`;
 
-      const stopsVal = offer.stops === 0 || offer.stops === "Nonstop" ? 'Direct' : `${offer.stops} stop(s)`;
+      const stopsCount = segments.length - 1;
+      const stopsVal = stopsCount <= 0 ? 'Direct' : `${stopsCount} stop(s)`;
 
       const originAirport = AIRPORTS[originCode];
       const destAirport = AIRPORTS[destinationCode];

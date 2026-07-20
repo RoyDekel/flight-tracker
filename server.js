@@ -29,7 +29,8 @@ app.get('/api/flights', async (req, res) => {
     returnDate,
     adults = '1',
     children = '0',
-    infants = '0'
+    infants = '0',
+    stops = '0'
   } = req.query;
 
   if (!origin || !destination || !departureDate) {
@@ -45,7 +46,8 @@ app.get('/api/flights', async (req, res) => {
       adults: parseInt(adults, 10),
       children: parseInt(children, 10),
       infants: parseInt(infants, 10)
-    }
+    },
+    stops
   };
 
   try {

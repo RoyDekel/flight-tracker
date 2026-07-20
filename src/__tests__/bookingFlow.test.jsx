@@ -17,8 +17,16 @@ describe('Booking Flow Integration Tests', () => {
     // Verify search panel is loaded
     expect(screen.getByText('Roundtrip Flight Search')).toBeInTheDocument();
 
+    // Select Arrival Airport as 'KRK'
+    const arrivalSelect = screen.getByLabelText('Arrival Airport');
+    fireEvent.change(arrivalSelect, { target: { value: 'KRK' } });
+
+    // Click Search Flights
+    const searchButton = screen.getByRole('button', { name: /Search Flights/i });
+    fireEvent.click(searchButton);
+
     // Verify outbound flights are listed
-    const outboundButtons = screen.getAllByRole('button', { name: /Select Outbound/i });
+    const outboundButtons = await screen.findAllByRole('button', { name: /Select Outbound/i });
     expect(outboundButtons.length).toBe(4);
 
     // 3. Select the first outbound leg flight

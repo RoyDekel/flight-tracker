@@ -13,22 +13,22 @@ export class KiwiProvider extends FlightProvider {
   }
 
   async searchAsync(searchRequest) {
-    const { origin, destination, departureDate, returnDate, passengers } = searchRequest;
+    const { origin, destination, departureDate, returnDate, passengers, stops } = searchRequest;
 
     if (!this.apiKey || this.apiKey.trim() === '') {
       throw new Error("Kiwi API Key is missing in environment.");
     }
 
-    console.log(`[KiwiProvider] Querying outbound: ${origin} -> ${destination} on ${departureDate}`);
-    const outboundOffers = await this.fetchKiwiOffers(origin, destination, departureDate, passengers);
+    console.log(`[KiwiProvider] Querying outbound: ${origin} -> ${destination} on ${departureDate} with stops: ${stops}`);
+    const outboundOffers = await this.fetchKiwiOffers(origin, destination, departureDate, passengers, stops);
     const outboundFlights = outboundOffers
       .map(offer => this.mapKiwiToFlight(offer, 'outbound', passengers))
       .filter(Boolean);
 
     let returnFlights = [];
     if (returnDate) {
-      console.log(`[KiwiProvider] Querying return: ${destination} -> ${origin} on ${returnDate}`);
-      const returnOffers = await this.fetchKiwiOffers(destination, origin, returnDate, passengers);
+      console.log(`[KiwiProvider] Querying return: ${destination} -> ${origin} on ${returnDate} with stops: ${stops}`);
+      const returnOffers = await this.fetchKiwiOffers(destination, origin, returnDate, passengers, stops);
       returnFlights = returnOffers
         .map(offer => this.mapKiwiToFlight(offer, 'return', passengers))
         .filter(Boolean);
@@ -40,7 +40,7 @@ export class KiwiProvider extends FlightProvider {
     };
   }
 
-  async fetchKiwiOffers(dep, arr, dateStr, passengers) {
+  async fetchKiwiOffers(dep, arr, dateStr, passengers, stops) {
     const kiwiDate = this.convertDateToKiwi(dateStr);
     
     // Set up standard query parameters for Kiwi search
@@ -55,6 +55,10 @@ export class KiwiProvider extends FlightProvider {
       infants: String(passengers.infants || 0),
       limit: '10' // Limit payload size
     });
+
+    if (stops === '1') {
+      queryParams.set('max_stopovers', '0');
+    }
 
     const url = `https://tequila-api.kiwi.com/v2/search?${queryParams.toString()}`;
     const response = await fetch(url, {

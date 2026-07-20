@@ -17,14 +17,15 @@ export default function App() {
   // 1. Search Query Parameters
   const [searchParams, setSearchParams] = useState({
     origin: 'TLV',
-    destination: 'KRK',
+    destination: '',
     departureDate: '2026-08-11',
     returnDate: '2026-08-16',
     passengers: {
       adults: 1,
       children: 0,
       infants: 0
-    }
+    },
+    stops: '0'
   });
 
   // 2. Active Roundtrip Bundle State
@@ -122,7 +123,8 @@ export default function App() {
           returnDate: '2026-08-16',
           adults: '1',
           children: '0',
-          infants: '0'
+          infants: '0',
+          stops: '0'
         });
         const apiBase = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' ? window.location.origin : 'http://localhost:3001');
         const res = await fetch(`${apiBase}/api/flights?${queryParams.toString()}`);

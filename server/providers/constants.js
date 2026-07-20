@@ -8,7 +8,14 @@ export const AIRPORTS = {
   DXB: { code: 'DXB', name: 'Dubai International Airport', city: 'Dubai', country: 'United Arab Emirates', coords: [25.2532, 55.3657] },
   FCO: { code: 'FCO', name: 'Leonardo da Vinci Airport', city: 'Rome', country: 'Italy', coords: [41.8003, 12.2389] },
   NRT: { code: 'NRT', name: 'Narita International Airport', city: 'Tokyo', country: 'Japan', coords: [35.7720, 140.3929] },
-  ATH: { code: 'ATH', name: 'Eleftherios Venizelos Airport', city: 'Athens', country: 'Greece', coords: [37.9356, 23.9484] }
+  ATH: { code: 'ATH', name: 'Eleftherios Venizelos Airport', city: 'Athens', country: 'Greece', coords: [37.9356, 23.9484] },
+  LAX: { code: 'LAX', name: 'Los Angeles International Airport', city: 'Los Angeles', country: 'United States', coords: [33.9416, -118.4085] },
+  SIN: { code: 'SIN', name: 'Singapore Changi Airport', city: 'Singapore', country: 'Singapore', coords: [1.3644, 103.9915] },
+  HND: { code: 'HND', name: 'Tokyo Haneda Airport', city: 'Tokyo', country: 'Japan', coords: [35.5494, 139.7798] },
+  AMS: { code: 'AMS', name: 'Amsterdam Airport Schiphol', city: 'Amsterdam', country: 'Netherlands', coords: [52.3105, 4.7683] },
+  SYD: { code: 'SYD', name: 'Sydney Kingsford Smith Airport', city: 'Sydney', country: 'Australia', coords: [-33.9461, 151.1772] },
+  BCN: { code: 'BCN', name: 'Josep Tarradellas Barcelona-El Prat Airport', city: 'Barcelona', country: 'Spain', coords: [41.2974, 2.0833] },
+  HKG: { code: 'HKG', name: 'Hong Kong International Airport', city: 'Hong Kong', country: 'China', coords: [22.3080, 113.9185] }
 };
 
 // Airline Directory with colors and codes
