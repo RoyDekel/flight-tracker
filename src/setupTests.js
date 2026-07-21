@@ -17,6 +17,7 @@ const mockMap = {
 
 const mockLayer = {
   addTo: vi.fn().mockReturnThis(),
+  setUrl: vi.fn().mockReturnThis(),
   remove: vi.fn(),
 };
 
@@ -32,6 +33,7 @@ const mockMarker = {
 const mockPolyline = {
   addTo: vi.fn().mockReturnThis(),
   setLatLngs: vi.fn().mockReturnThis(),
+  setStyle: vi.fn().mockReturnThis(),
   remove: vi.fn(),
 };
 

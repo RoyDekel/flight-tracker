@@ -1,7 +1,50 @@
 /* AeroTrack - Global Design System */
 
 :root {
-  /* Color Palette - Cyber / Aero Dark Theme */
+  /* Color Palette - Aero Light Theme (Default) */
+  --bg-primary: #f1f5f9;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f8fafc;
+  --bg-glass: rgba(255, 255, 255, 0.8);
+  --bg-glass-hover: rgba(248, 250, 252, 0.9);
+  --border-glass: rgba(15, 23, 42, 0.08);
+  --border-glass-bright: rgba(15, 23, 42, 0.15);
+  
+  --primary: #0284c7;        /* Sky Blue */
+  --primary-glow: rgba(2, 132, 199, 0.25);
+  --primary-glow-weak: rgba(2, 132, 199, 0.08);
+  --secondary: #2563eb;      /* Royal Blue */
+  --accent: #7c3aed;         /* Violet */
+  --accent-glow: rgba(124, 58, 237, 0.2);
+  
+  --success: #10b981;
+  --success-glow: rgba(16, 185, 129, 0.15);
+  --warning: #f59e0b;
+  --warning-glow: rgba(245, 158, 11, 0.15);
+  --danger: #ef4444;
+  --danger-glow: rgba(239, 68, 68, 0.15);
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-on-primary: #ffffff;
+  
+  --font-sans: 'Outfit', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Outfit', sans-serif;
+  
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.12);
+  --shadow-glow: 0 0 20px var(--primary-glow);
+  
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+}
+
+/* Cyber / Aero Dark Theme Toggle */
+.dark-theme {
   --bg-primary: #0b0f19;
   --bg-secondary: #121826;
   --bg-tertiary: #1b2336;
@@ -27,49 +70,11 @@
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
-  
-  --font-sans: 'Outfit', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  --font-heading: 'Outfit', sans-serif;
+  --text-on-primary: #0b0f19;
   
   --shadow-sm: 0 2px 8px -1px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
-  --shadow-glow: 0 0 20px var(--primary-glow);
-  
-  --radius-sm: 8px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
-  --radius-xl: 32px;
-}
-
-/* Optional Light Theme Toggle class if user requests it later */
-.light-theme {
-  --bg-primary: #f1f5f9;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f8fafc;
-  --bg-glass: rgba(255, 255, 255, 0.8);
-  --bg-glass-hover: rgba(248, 250, 252, 0.9);
-  --border-glass: rgba(15, 23, 42, 0.08);
-  --border-glass-bright: rgba(15, 23, 42, 0.15);
-  
-  --primary: #0284c7;        /* Sky Blue */
-  --primary-glow: rgba(2, 132, 199, 0.25);
-  --primary-glow-weak: rgba(2, 132, 199, 0.08);
-  --secondary: #2563eb;      /* Royal Blue */
-  --accent: #7c3aed;         /* Violet */
-  --accent-glow: rgba(124, 58, 237, 0.2);
-  
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
-  
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.12);
 }
 
 /* Reset and Base Styles */
@@ -168,7 +173,7 @@ body {
 
 .btn-primary {
   background: linear-gradient(135deg, var(--primary), var(--secondary));
-  color: #0b0f19;
+  color: var(--text-on-primary);
   font-weight: 600;
   box-shadow: 0 4px 15px var(--primary-glow-weak);
 }

@@ -3,9 +3,10 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { AIRPORTS } from '../utils/flightSimulator';
 
-export default function FlightMap({ telemetry, activeFlight }) {
+export default function FlightMap({ telemetry, activeFlight, theme }) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
+  const tileLayerRef = useRef(null);
   const planeMarkerRef = useRef(null);
   const pathLineRef = useRef(null);
   const fullPathRef = useRef(null);
@@ -22,8 +23,8 @@ export default function FlightMap({ telemetry, activeFlight }) {
   // Custom airport markers
   const originIcon = L.divIcon({
     html: `
-      <div style="background: rgba(0, 242, 254, 0.15); border: 2px solid #00f2fe; width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px #00f2fe;">
-        <div style="background: #00f2fe; width: 6px; height: 6px; border-radius: 50%;"></div>
+      <div style="background: var(--primary-glow-weak); border: 2px solid var(--primary); width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px var(--primary-glow);">
+        <div style="background: var(--primary); width: 6px; height: 6px; border-radius: 50%;"></div>
       </div>
     `,
     className: 'airport-marker-origin',
@@ -33,8 +34,8 @@ export default function FlightMap({ telemetry, activeFlight }) {
 
   const destIcon = L.divIcon({
     html: `
-      <div style="background: rgba(161, 140, 209, 0.2); border: 2px solid #a18cd1; width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px #a18cd1;">
-        <div style="background: #a18cd1; width: 6px; height: 6px; border-radius: 50%;"></div>
+      <div style="background: var(--accent-glow); border: 2px solid var(--accent); width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px var(--accent-glow);">
+        <div style="background: var(--accent); width: 6px; height: 6px; border-radius: 50%;"></div>
       </div>
     `,
     className: 'airport-marker-dest',
@@ -46,7 +47,7 @@ export default function FlightMap({ telemetry, activeFlight }) {
     return L.divIcon({
       html: `
         <div style="transform: rotate(${heading - 45}deg); transition: transform 0.2s ease; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#00f2fe" stroke="#0b0f19" stroke-width="1.2" width="30" height="30" style="filter: drop-shadow(0 0 6px rgba(0, 242, 254, 0.9));">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="var(--primary)" stroke="var(--bg-secondary)" stroke-width="1.2" width="30" height="30" style="filter: drop-shadow(0 0 6px var(--primary-glow));">
             <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L14 19v-5.5L21 16z"/>
           </svg>
         </div>
@@ -76,13 +77,18 @@ export default function FlightMap({ telemetry, activeFlight }) {
 
     mapRef.current = map;
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    const tileUrl = theme === 'dark' 
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' 
+      : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+    const tileLayer = L.tileLayer(tileUrl, {
       maxZoom: 19
     }).addTo(map);
+    tileLayerRef.current = tileLayer;
 
     // Draw full route line (dotted)
     const fullPath = L.polyline([startCoords, endCoords], {
-      color: 'rgba(255, 255, 255, 0.15)',
+      color: theme === 'dark' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(15, 23, 42, 0.15)',
       weight: 2,
       dashArray: '5, 8'
     }).addTo(map);
@@ -90,7 +96,7 @@ export default function FlightMap({ telemetry, activeFlight }) {
 
     // Draw active flight coverage path line
     const activePath = L.polyline([startCoords, [telemetry.latitude, telemetry.longitude]], {
-      color: '#00f2fe',
+      color: theme === 'dark' ? '#00f2fe' : '#0284c7',
       weight: 3.5,
       opacity: 0.85
     }).addTo(map);
@@ -122,6 +128,30 @@ export default function FlightMap({ telemetry, activeFlight }) {
       }
     };
   }, []);
+
+  // Update Tile Layer and lines styling when Theme changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    if (tileLayerRef.current) {
+      const tileUrl = theme === 'dark' 
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' 
+        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+      tileLayerRef.current.setUrl(tileUrl);
+    }
+    
+    if (fullPathRef.current) {
+      fullPathRef.current.setStyle({
+        color: theme === 'dark' ? 'rgba(255, 255, 255, 0.25)' : 'rgba(15, 23, 42, 0.15)'
+      });
+    }
+    
+    if (pathLineRef.current) {
+      pathLineRef.current.setStyle({
+        color: theme === 'dark' ? '#00f2fe' : '#0284c7'
+      });
+    }
+  }, [theme]);
 
   // Update Map Bounds and Markers when flight changes
   useEffect(() => {
@@ -163,12 +193,12 @@ export default function FlightMap({ telemetry, activeFlight }) {
 
     const currentCoords = [telemetry.latitude, telemetry.longitude];
 
-    if (planeMarkerRef.current) {
+      if (planeMarkerRef.current) {
       planeMarkerRef.current.setLatLng(currentCoords);
       planeMarkerRef.current.setIcon(createPlaneIcon(telemetry.heading));
       planeMarkerRef.current.setTooltipContent(`
         <b>${activeFlight.flightNumber}</b><br>
-        Status: <span style="color: #00f2fe; font-weight: bold">${telemetry.status}</span><br>
+        Status: <span style="color: var(--primary); font-weight: bold">${telemetry.status}</span><br>
         Speed: ${telemetry.speed} km/h<br>
         Alt: ${telemetry.altitude} ft
       `);
@@ -194,7 +224,7 @@ export default function FlightMap({ telemetry, activeFlight }) {
         gap: '6px'
       }}>
         <div style={{
-          background: 'rgba(11, 15, 25, 0.85)',
+          background: 'var(--bg-glass)',
           backdropFilter: 'blur(8px)',
           border: '1px solid var(--border-glass)',
           borderRadius: 'var(--radius-sm)',
@@ -209,7 +239,7 @@ export default function FlightMap({ telemetry, activeFlight }) {
 
         {telemetry.status !== 'Scheduled' && (
           <div style={{
-            background: 'rgba(11, 15, 25, 0.85)',
+            background: 'var(--bg-glass)',
             backdropFilter: 'blur(8px)',
             border: '1px solid var(--border-glass)',
             borderRadius: 'var(--radius-sm)',
@@ -243,7 +273,7 @@ export default function FlightMap({ telemetry, activeFlight }) {
         pointerEvents: 'none'
       }}>
         <div style={{
-          background: 'rgba(11, 15, 25, 0.85)',
+          background: 'var(--bg-glass)',
           backdropFilter: 'blur(8px)',
           border: '1px solid var(--border-glass)',
           borderRadius: 'var(--radius-sm)',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plane, Calendar, Bookmark, Bell, Compass, Activity } from 'lucide-react';
+import { Plane, Calendar, Bookmark, Bell, Compass, Activity, Sun, Moon } from 'lucide-react';
 import { 
   AIRPORTS, 
   generateFlightsForRoute,
@@ -14,6 +14,20 @@ import Watchlist from './components/Watchlist';
 import AlertsManager from './components/AlertsManager';
 
 export default function App() {
+  // 0. Theme State
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('theme') || 'light';
+  });
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark-theme');
+    } else {
+      document.documentElement.classList.remove('dark-theme');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
   // 1. Search Query Parameters
   const [searchParams, setSearchParams] = useState({
     origin: 'TLV',
@@ -422,8 +436,21 @@ export default function App() {
           </button>
         </div>
 
-        {/* NOTIFICATIONS HUD BELL */}
+        {/* NOTIFICATIONS & THEME HUD */}
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <button
+            onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
+            className="btn-icon"
+            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+            style={{
+              transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'rotate(15deg)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'rotate(0deg)'}
+          >
+            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
+
           <button 
             onClick={handleOpenNotifications}
             className="btn-icon" 
@@ -496,9 +523,11 @@ export default function App() {
               <FlightMap 
                 telemetry={telemetry} 
                 activeFlight={activeFlight} 
+                theme={theme}
               />
               <PriceChart 
                 activeFlight={activeFlight} 
+                theme={theme}
               />
             </div>
 

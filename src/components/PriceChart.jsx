@@ -26,7 +26,21 @@ ChartJS.register(
   Filler
 );
 
-export default function PriceChart({ activeFlight }) {
+export default function PriceChart({ activeFlight, theme }) {
+  const isDark = theme === 'dark';
+  const chartColors = {
+    historyBorder: isDark ? '#00f2fe' : '#0284c7',
+    historyBg: isDark ? 'rgba(0, 242, 254, 0.06)' : 'rgba(2, 132, 199, 0.06)',
+    predictionBorder: isDark ? '#a18cd1' : '#7c3aed',
+    predictionBg: isDark ? 'rgba(161, 140, 209, 0.04)' : 'rgba(124, 58, 237, 0.04)',
+    pointBorder: isDark ? '#0b0f19' : '#ffffff',
+    grid: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(15, 23, 42, 0.05)',
+    ticks: isDark ? '#64748b' : '#475569',
+    tooltipBg: isDark ? '#121826' : '#ffffff',
+    tooltipTitle: isDark ? '#f8fafc' : '#0f172a',
+    tooltipBody: isDark ? '#94a3b8' : '#475569',
+    tooltipBorder: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.1)'
+  };
   const { history, predictions, advice, adviceDetails } = generatePriceHistory(
     activeFlight.flightNumber,
     activeFlight.price
@@ -56,11 +70,11 @@ export default function PriceChart({ activeFlight }) {
       {
         label: 'Historical Price ($)',
         data: historyData,
-        borderColor: '#00f2fe',
-        backgroundColor: 'rgba(0, 242, 254, 0.06)',
+        borderColor: chartColors.historyBorder,
+        backgroundColor: chartColors.historyBg,
         borderWidth: 2.5,
-        pointBackgroundColor: '#00f2fe',
-        pointBorderColor: '#0b0f19',
+        pointBackgroundColor: chartColors.historyBorder,
+        pointBorderColor: chartColors.pointBorder,
         pointBorderWidth: 1.5,
         pointRadius: (context) => {
           // Highlight first, current, and last points
@@ -75,12 +89,12 @@ export default function PriceChart({ activeFlight }) {
       {
         label: 'Predicted Price ($)',
         data: predictionData,
-        borderColor: '#a18cd1',
-        backgroundColor: 'rgba(161, 140, 209, 0.04)',
+        borderColor: chartColors.predictionBorder,
+        backgroundColor: chartColors.predictionBg,
         borderWidth: 2.5,
         borderDash: [5, 5],
-        pointBackgroundColor: '#a18cd1',
-        pointBorderColor: '#0b0f19',
+        pointBackgroundColor: chartColors.predictionBorder,
+        pointBorderColor: chartColors.pointBorder,
         pointBorderWidth: 1.5,
         pointRadius: (context) => {
           const index = context.dataIndex;
@@ -102,10 +116,10 @@ export default function PriceChart({ activeFlight }) {
         display: false // We will render a custom HTML legend
       },
       tooltip: {
-        backgroundColor: '#121826',
-        titleColor: '#f8fafc',
-        bodyColor: '#94a3b8',
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: chartColors.tooltipBg,
+        titleColor: chartColors.tooltipTitle,
+        bodyColor: chartColors.tooltipBody,
+        borderColor: chartColors.tooltipBorder,
         borderWidth: 1,
         padding: 10,
         cornerRadius: 8,
@@ -124,7 +138,7 @@ export default function PriceChart({ activeFlight }) {
           display: false
         },
         ticks: {
-          color: '#64748b',
+          color: chartColors.ticks,
           font: {
             size: 10,
             family: 'Outfit'
@@ -134,10 +148,10 @@ export default function PriceChart({ activeFlight }) {
       },
       y: {
         grid: {
-          color: 'rgba(255, 255, 255, 0.04)'
+          color: chartColors.grid
         },
         ticks: {
-          color: '#64748b',
+          color: chartColors.ticks,
           font: {
             size: 10,
             family: 'Outfit'
@@ -173,11 +187,11 @@ export default function PriceChart({ activeFlight }) {
         {/* Custom Legend */}
         <div style={{ display: 'flex', gap: '16px', fontSize: '0.8rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ display: 'inline-block', width: '12px', height: '3px', backgroundColor: '#00f2fe', borderRadius: '1px' }}></span>
+            <span style={{ display: 'inline-block', width: '12px', height: '3px', backgroundColor: 'var(--primary)', borderRadius: '1px' }}></span>
             <span style={{ color: 'var(--text-secondary)' }}>History</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ display: 'inline-block', width: '12px', height: '3px', borderTop: '2px dashed #a18cd1', borderRadius: '1px' }}></span>
+            <span style={{ display: 'inline-block', width: '12px', height: '3px', borderTop: '2px dashed var(--accent)', borderRadius: '1px' }}></span>
             <span style={{ color: 'var(--text-secondary)' }}>Prediction</span>
           </div>
         </div>
