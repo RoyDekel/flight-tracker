@@ -5,6 +5,40 @@ import {
 } from 'lucide-react';
 import { AIRPORTS, AIRLINES, generateFlightsForRoute, getSkyscannerUrl } from '../utils/flightSimulator';
 
+const AirlineLogo = ({ flight, fallbackLogo, size = 32 }) => {
+  const iata = flight.airlineCode ? flight.airlineCode.toUpperCase() : '';
+  const urls = [];
+  if (flight.airlineLogo) urls.push(flight.airlineLogo);
+  if (iata) {
+    urls.push(`https://pics.avs.io/${size}/${size}/${iata}.png`);
+    urls.push(`https://www.gstatic.com/flights/airline_logos/70px/${iata}.png`);
+  }
+
+  const [urlIndex, setUrlIndex] = useState(0);
+
+  const handleError = () => {
+    setUrlIndex((prev) => prev + 1);
+  };
+
+  if (urlIndex < urls.length) {
+    return (
+      <img
+        src={urls[urlIndex]}
+        alt={flight.airlineName || 'Airline'}
+        onError={handleError}
+        style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          objectFit: 'contain',
+          borderRadius: '4px'
+        }}
+      />
+    );
+  }
+
+  return <span style={{ fontSize: `${size * 0.45}px` }}>{fallbackLogo || '✈️'}</span>;
+};
+
 export default function AlternativeFlights({
   selectedDate,
   setSelectedDate,
@@ -55,7 +89,7 @@ export default function AlternativeFlights({
   }, []);
 
   // Sorting & Filtering local states
-  const [sortKey, setSortKey] = useState('price'); // 'price', 'departureTime'
+  const [sortKey, setSortKey] = useState('price'); // 'price', 'duration'
   const [filterCarrier, setFilterCarrier] = useState('ALL');
 
   // Booking Flow Steps: 1 = Outbound Selection, 2 = Return Selection, 3 = Confirmation Bundle
@@ -222,25 +256,20 @@ export default function AlternativeFlights({
     return flight.airlineName === filterCarrier;
   });
 
-  const parseTimeToMinutes = (timeStr) => {
-    if (!timeStr) return 0;
-    const match = timeStr.match(/(\d{1,2}):(\d{2})(?:\s*(AM|PM))?/i);
+  const parseDurationToMinutes = (durationStr) => {
+    if (!durationStr) return 0;
+    const match = durationStr.match(/(\d+)h\s*(\d+)m/i);
     if (!match) return 0;
-    let hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    const ampm = match[3];
-    if (ampm) {
-      if (ampm.toUpperCase() === 'PM' && hours < 12) hours += 12;
-      if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
-    }
-    return hours * 60 + minutes;
+    return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
   };
 
   const sortedFlights = [...filteredFlights].sort((a, b) => {
     if (sortKey === 'price') {
       return a.price - b.price;
-    } else if (sortKey === 'departureTime') {
-      return parseTimeToMinutes(a.departureTime) - parseTimeToMinutes(b.departureTime);
+    } else if (sortKey === 'duration') {
+      const aDur = a.durationVal != null ? a.durationVal : parseDurationToMinutes(a.duration);
+      const bDur = b.durationVal != null ? b.durationVal : parseDurationToMinutes(b.duration);
+      return aDur - bDur;
     }
     return 0;
   });
@@ -659,8 +688,8 @@ export default function AlternativeFlights({
                   <button onClick={() => setSortKey('price')} style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', background: sortKey === 'price' ? 'var(--bg-secondary)' : 'transparent', color: sortKey === 'price' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer', fontSize: '0.75rem' }}>
                     Cheapest
                   </button>
-                  <button onClick={() => setSortKey('departureTime')} style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', background: sortKey === 'departureTime' ? 'var(--bg-secondary)' : 'transparent', color: sortKey === 'departureTime' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer', fontSize: '0.75rem' }}>
-                    Time
+                  <button onClick={() => setSortKey('duration')} style={{ padding: '4px 10px', borderRadius: '4px', border: 'none', background: sortKey === 'duration' ? 'var(--bg-secondary)' : 'transparent', color: sortKey === 'duration' ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer', fontSize: '0.75rem' }}>
+                    Shortest
                   </button>
                 </div>
               </div>
@@ -731,8 +760,8 @@ export default function AlternativeFlights({
 
                       {/* Airline info */}
                       <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flex: '1 1 200px', minWidth: '160px', maxWidth: '260px' }}>
-                        <div style={{ width: '38px', height: '38px', borderRadius: '8px', backgroundColor: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', border: '1px solid var(--border-glass)', flexShrink: 0 }}>
-                          {airline.logo}
+                        <div style={{ width: '38px', height: '38px', borderRadius: '8px', backgroundColor: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', border: '1px solid var(--border-glass)', flexShrink: 0, overflow: 'hidden' }}>
+                          <AirlineLogo flight={flight} fallbackLogo={airline.logo} size={32} />
                         </div>
                         <div style={{ overflow: 'hidden' }}>
                           <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{flight.airlineName}</div>

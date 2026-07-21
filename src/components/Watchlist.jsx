@@ -1,6 +1,40 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Bookmark, Plane, Calendar, Trash2, ArrowRight, Eye } from 'lucide-react';
 import { AIRLINES } from '../utils/flightSimulator';
+
+const AirlineLogo = ({ flight, fallbackLogo, size = 32 }) => {
+  const iata = flight.airlineCode ? flight.airlineCode.toUpperCase() : '';
+  const urls = [];
+  if (flight.airlineLogo) urls.push(flight.airlineLogo);
+  if (iata) {
+    urls.push(`https://pics.avs.io/${size}/${size}/${iata}.png`);
+    urls.push(`https://www.gstatic.com/flights/airline_logos/70px/${iata}.png`);
+  }
+
+  const [urlIndex, setUrlIndex] = useState(0);
+
+  const handleError = () => {
+    setUrlIndex((prev) => prev + 1);
+  };
+
+  if (urlIndex < urls.length) {
+    return (
+      <img
+        src={urls[urlIndex]}
+        alt={flight.airlineName || 'Airline'}
+        onError={handleError}
+        style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          objectFit: 'contain',
+          borderRadius: '4px'
+        }}
+      />
+    );
+  }
+
+  return <span style={{ fontSize: `${size * 0.45}px` }}>{fallbackLogo || '✈️'}</span>;
+};
 
 export default function Watchlist({ 
   watchlist, 
@@ -112,9 +146,10 @@ export default function Watchlist({
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '1.1rem',
-                    border: '1px solid var(--border-glass)'
+                    border: '1px solid var(--border-glass)',
+                    overflow: 'hidden'
                   }}>
-                    {airline.logo}
+                    <AirlineLogo flight={flight} fallbackLogo={airline.logo} size={28} />
                   </div>
                   <div>
                     <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>

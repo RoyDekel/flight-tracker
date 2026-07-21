@@ -136,6 +136,7 @@ export class SerpApiProvider extends FlightProvider {
         flightNumber: flightNum,
         airlineCode,
         airlineName,
+        airlineLogo: firstSegment?.airline_logo || '',
         departureTime: depTimeStr,
         arrivalTime: arrTimeStr,
         duration: durationStr,

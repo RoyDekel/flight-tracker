@@ -1,10 +1,44 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Plane, Clock, ShieldAlert, Award, 
   Play, Pause, RotateCcw, Bell, 
   Bookmark, BookmarkCheck, Calendar, Info, Globe, Users 
 } from 'lucide-react';
 import { AIRLINES, getSkyscannerUrl } from '../utils/flightSimulator';
+
+const AirlineLogo = ({ flight, fallbackLogo, size = 32 }) => {
+  const iata = flight.airlineCode ? flight.airlineCode.toUpperCase() : '';
+  const urls = [];
+  if (flight.airlineLogo) urls.push(flight.airlineLogo);
+  if (iata) {
+    urls.push(`https://pics.avs.io/${size}/${size}/${iata}.png`);
+    urls.push(`https://www.gstatic.com/flights/airline_logos/70px/${iata}.png`);
+  }
+
+  const [urlIndex, setUrlIndex] = useState(0);
+
+  const handleError = () => {
+    setUrlIndex((prev) => prev + 1);
+  };
+
+  if (urlIndex < urls.length) {
+    return (
+      <img
+        src={urls[urlIndex]}
+        alt={flight.airlineName || 'Airline'}
+        onError={handleError}
+        style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          objectFit: 'contain',
+          borderRadius: '4px'
+        }}
+      />
+    );
+  }
+
+  return <span style={{ fontSize: `${size * 0.45}px` }}>{fallbackLogo || '✈️'}</span>;
+};
 
 export default function FlightDetails({ 
   activeFlight, 
@@ -61,9 +95,10 @@ export default function FlightDetails({
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '1.5rem',
-            boxShadow: `0 0 12px ${airlineInfo.color}25`
+            boxShadow: `0 0 12px ${airlineInfo.color}25`,
+            overflow: 'hidden'
           }}>
-            {airlineInfo.logo}
+            <AirlineLogo flight={activeFlight} fallbackLogo={airlineInfo.logo} size={40} />
           </div>
           <div>
             <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
