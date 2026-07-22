@@ -71,9 +71,12 @@ export default function FlightMap({ telemetry, activeFlight, theme }) {
     const map = L.map(mapContainerRef.current, {
       center: midpoint,
       zoom: 4,
-      zoomControl: true,
+      zoomControl: false,
       attributionControl: false
     });
+
+    // Move zoom control to bottom right to prevent overlapping HUD overlays
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     mapRef.current = map;
 
